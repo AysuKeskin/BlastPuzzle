@@ -89,6 +89,43 @@ namespace BlastPuzzle.Boards
         // board ever needs to raise change notifications.
         public void SetBlock(BoardPosition position, Block block) => GetCell(position).SetBlock(block);
 
+        // Moves the exact Block instance from one cell to another.
+        //
+        // The Board stays the mutation authority: gravity describes WHICH moves to make,
+        // but only this method touches a Cell. Both coordinates are validated by GetCell,
+        // and the pre-conditions are enforced rather than assumed, so a wrong move fails
+        // loudly here instead of silently duplicating or losing a block.
+        //
+        // Returns the moved Block, so callers building a move record do not have to read
+        // the source cell first.
+        public Block MoveBlock(BoardPosition from, BoardPosition to)
+        {
+            Cell source = GetCell(from);
+            Cell destination = GetCell(to);
+
+            if (source.IsEmpty)
+            {
+                throw new InvalidOperationException($"There is no block at {from} to move.");
+            }
+
+            // Moving something to where it already is: nothing to do. Handled explicitly
+            // because the "destination must be empty" check below would otherwise reject it.
+            if (from == to)
+            {
+                return source.Block;
+            }
+
+            if (!destination.IsEmpty)
+            {
+                throw new InvalidOperationException($"Cannot move to {to}: that cell already holds a block.");
+            }
+
+            Block moved = source.Block;
+            source.RemoveBlock();
+            destination.SetBlock(moved);
+            return moved;
+        }
+
         // Returns what was removed (null if the cell was already empty) so callers
         // do not have to read the cell first and then clear it.
         public Block RemoveBlock(BoardPosition position)

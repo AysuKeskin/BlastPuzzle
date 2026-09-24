@@ -137,7 +137,7 @@ namespace BlastPuzzle.Tests.EditMode
         private static BoardPosition At(int row, int column) => new BoardPosition(row, column);
 
         [Test]
-        public void Bomb_RemovesBlocksIn3x3Area()
+        public void Bomb_RemovesBlocksInPlusShape()
         {
             //  B B B B B
             //  B R R R B
@@ -153,14 +153,29 @@ namespace BlastPuzzle.Tests.EditMode
 
             PowerUpActivationResult result = PowerUpResolver.Activate(board, At(2, 2));
 
-            Assert.That(result.RemovedBlockPositions, Has.Count.EqualTo(9));
-            for (int row = 1; row <= 3; row++)
-            {
-                for (int column = 1; column <= 3; column++)
-                {
-                    Assert.That(board.GetCell(row, column).IsEmpty, Is.True, $"r{row}c{column} should be cleared.");
-                }
-            }
+            // Itself plus the four cells sharing an edge -- five, not nine.
+            Assert.That(result.RemovedBlockPositions,
+                Is.EquivalentTo(new[] { At(2, 2), At(3, 2), At(1, 2), At(2, 3), At(2, 1) }));
+        }
+
+        [Test]
+        public void Bomb_DoesNotAffectDiagonals()
+        {
+            //  The four cells touching the bomb only at a corner must survive. This is the
+            //  whole point of the plus shape.
+            Board board = BoardLayout.Build(
+                "B B B B B",
+                "B R R R B",
+                "B R X R B",
+                "B R R R B",
+                "B B B B B");
+
+            PowerUpResolver.Activate(board, At(2, 2));
+
+            Assert.That(board.GetCell(1, 1).HasBlock, Is.True, "bottom-left diagonal survived");
+            Assert.That(board.GetCell(1, 3).HasBlock, Is.True, "bottom-right diagonal survived");
+            Assert.That(board.GetCell(3, 1).HasBlock, Is.True, "top-left diagonal survived");
+            Assert.That(board.GetCell(3, 3).HasBlock, Is.True, "top-right diagonal survived");
         }
 
         [Test]
@@ -189,7 +204,7 @@ namespace BlastPuzzle.Tests.EditMode
 
             PowerUpResolver.Activate(board, At(2, 2));
 
-            // The whole outer ring survives.
+            // The whole outer ring survives...
             for (int i = 0; i < 5; i++)
             {
                 Assert.That(board.GetCell(4, i).HasBlock, Is.True);
@@ -197,6 +212,10 @@ namespace BlastPuzzle.Tests.EditMode
                 Assert.That(board.GetCell(i, 0).HasBlock, Is.True);
                 Assert.That(board.GetCell(i, 4).HasBlock, Is.True);
             }
+
+            // ...and so does the ring immediately around the bomb, apart from the plus arms.
+            Assert.That(board.GetCell(1, 1).HasBlock, Is.True);
+            Assert.That(board.GetCell(3, 3).HasBlock, Is.True);
         }
 
         [Test]
@@ -212,9 +231,12 @@ namespace BlastPuzzle.Tests.EditMode
 
             PowerUpActivationResult result = PowerUpResolver.Activate(board, At(0, 0));
 
+            // Itself, the cell above and the cell to the right. The diagonal (1,1) is not
+            // included, and the two off-board directions simply do not exist.
             Assert.That(result.RemovedBlockPositions,
-                Is.EquivalentTo(new[] { At(0, 0), At(0, 1), At(1, 0), At(1, 1) }),
-                "A corner bomb affects four cells, not nine.");
+                Is.EquivalentTo(new[] { At(0, 0), At(1, 0), At(0, 1) }),
+                "A corner bomb affects three cells.");
+            Assert.That(board.GetCell(1, 1).HasBlock, Is.True, "The diagonal survived.");
         }
 
         [Test]
@@ -230,16 +252,18 @@ namespace BlastPuzzle.Tests.EditMode
 
             PowerUpActivationResult result = PowerUpResolver.Activate(board, At(1, 0));
 
-            Assert.That(result.RemovedBlockPositions, Has.Count.EqualTo(6),
-                "An edge bomb affects six cells.");
+            // Itself, above, below and right -- left is off the board.
+            Assert.That(result.RemovedBlockPositions,
+                Is.EquivalentTo(new[] { At(1, 0), At(2, 0), At(0, 0), At(1, 1) }),
+                "An edge bomb affects four cells.");
         }
 
         [Test]
         public void Bomb_HitsCratesInsideArea()
         {
-            //  R C R
+            //  R C R     the crate directly above the bomb IS hit
             //  R X R
-            //  R R C     the bottom-right crate is inside the 3x3 too
+            //  R R C     the crate on the diagonal is NOT
             Board board = BoardLayout.Build(
                 "R C R",
                 "R X R",
@@ -247,9 +271,10 @@ namespace BlastPuzzle.Tests.EditMode
 
             PowerUpActivationResult result = PowerUpResolver.Activate(board, At(1, 1));
 
-            Assert.That(result.RemovedObstacles, Has.Count.EqualTo(2));
-            Assert.That(result.RemovedObstacles.Select(o => o.Position),
-                Is.EquivalentTo(new[] { At(2, 1), At(0, 2) }));
+            Assert.That(result.RemovedObstacles, Has.Count.EqualTo(1));
+            Assert.That(result.RemovedObstacles[0].Position, Is.EqualTo(At(2, 1)));
+            Assert.That(board.GetCell(0, 2).HasObstacle, Is.True,
+                "A crate touching the bomb only at a corner survives.");
         }
     }
 
@@ -355,7 +380,7 @@ namespace BlastPuzzle.Tests.EditMode
         public void BombActivation_CountsOnlyNormalBlocksTowardColorGoals()
         {
             //  R R R
-            //  R X H    the bomb's 3x3 catches the rocket at r1c2
+            //  R X H    the bomb's plus catches the rocket directly to its right
             //  R R R
             Board board = BoardLayout.Build(
                 "R R R",
@@ -368,9 +393,9 @@ namespace BlastPuzzle.Tests.EditMode
             PowerUpActivationResult result = PowerUpResolver.Activate(board, At(1, 1));
             tracker.ProcessRemovedBlocks(result.RemovedBlocks);
 
-            Assert.That(result.RemovedBlocks, Has.Count.EqualTo(9));
-            Assert.That(red.CurrentCount, Is.EqualTo(7),
-                "Nine pieces removed, but the bomb and the rocket are not Red normal blocks.");
+            Assert.That(result.RemovedBlocks, Has.Count.EqualTo(5), "Plus shape: five pieces.");
+            Assert.That(red.CurrentCount, Is.EqualTo(3),
+                "Five pieces removed, but the bomb and the rocket are not Red normal blocks.");
         }
 
         [Test]

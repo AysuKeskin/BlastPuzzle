@@ -71,7 +71,8 @@ namespace BlastPuzzle.PowerUps
         //
         //   Rocket Horizontal : the whole row
         //   Rocket Vertical   : the whole column
-        //   Bomb              : the 3x3 around it, clamped to the board
+        //   Bomb              : itself plus its four orthogonal neighbours (a plus shape),
+        //                       clamped to the board -- never diagonals
         //
         // A Rocket does NOT stop at a crate: the line is computed geometrically, so the
         // blast continues across the full row or column regardless of what it passes through.
@@ -98,17 +99,21 @@ namespace BlastPuzzle.PowerUps
                     break;
 
                 case BlockKind.Bomb:
-                    for (int row = position.Row - 1; row <= position.Row + 1; row++)
+                    // A PLUS, not a square: the bomb's own cell plus its four orthogonal
+                    // neighbours. Diagonals are deliberately excluded, for the same reason
+                    // they are excluded from colour matching and crate hits -- "touching"
+                    // means sharing an edge everywhere in this game, and a bomb that broke
+                    // that rule would be the one inconsistent thing on the board.
+                    //
+                    // Reuses Board.GetOrthogonalNeighbours rather than re-deriving the four
+                    // offsets, so there is exactly one definition of "orthogonal" in the
+                    // project. It already skips off-board coordinates, which is why a corner
+                    // bomb affects three cells and an edge bomb four with no special case.
+                    cells.Add(position);
+
+                    foreach (Cell neighbour in board.GetOrthogonalNeighbours(position))
                     {
-                        for (int column = position.Column - 1; column <= position.Column + 1; column++)
-                        {
-                            // Clamping is just a bounds test, so a corner bomb naturally
-                            // affects four cells rather than needing a special case.
-                            if (board.IsInside(row, column))
-                            {
-                                cells.Add(new BoardPosition(row, column));
-                            }
-                        }
+                        cells.Add(neighbour.Position);
                     }
 
                     break;

@@ -36,6 +36,7 @@ namespace BlastPuzzle.PowerUps
 
             if (group.Count >= BombThreshold)
             {
+                // Clears a plus shape: its own cell and the four cells sharing an edge.
                 return Block.CreateBomb(color);
             }
 

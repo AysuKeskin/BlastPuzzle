@@ -4,6 +4,7 @@ using BlastPuzzle.Blocks;
 using BlastPuzzle.Boards;
 using BlastPuzzle.Obstacles;
 using UnityEngine;
+using UnityEngine.Pool;
 
 namespace BlastPuzzle.Presentation
 {
@@ -42,10 +43,34 @@ namespace BlastPuzzle.Presentation
         [SerializeField] private float powerUpPopDuration = 0.18f;
         [SerializeField] private float activationDuration = 0.12f;
 
+        // BlockViews are recycled rather than destroyed. Refill creates one per removed
+        // block every single move, so without this the game would Instantiate and Destroy
+        // ten-odd GameObjects per tap for the whole session.
+        //
+        // The pool lives HERE rather than in its own component because BoardView already
+        // owns BlockView lifecycle -- it creates them, maps them to blocks and disposes of
+        // them. Splitting that across two objects would divide one responsibility and add a
+        // scene reference to wire, for no gain. It is deliberately specific to BlockView:
+        // no IPoolable, no registry, no generic framework for a single pooled type.
+        private ObjectPool<BlockView> viewPool;
+
+        // Development instrumentation. TotalViewsCreated is the number of GameObjects ever
+        // instantiated; if pooling works it stops rising once the board has warmed up,
+        // however many moves are played.
+        public int TotalViewsCreated { get; private set; }
+
+        public int PoolInactiveCount => viewPool?.CountInactive ?? 0;
+
+        public int ActiveViewCount => viewsByBlock.Count;
+
         // Reused across animations so a move does not allocate a fresh list per phase.
         private readonly List<ViewTravel> travels = new List<ViewTravel>();
         private readonly List<BlockView> dyingBlocks = new List<BlockView>();
         private readonly List<CrateView> dyingCrates = new List<CrateView>();
+        private readonly List<BlockView> releaseBuffer = new List<BlockView>();
+
+        // Used only when no board is available to size the pool from.
+        private const int DefaultPoolCapacity = 64;
 
         // One view's journey for this phase. A struct in a reused list: no per-frame garbage.
         private readonly struct ViewTravel
@@ -341,9 +366,13 @@ namespace BlastPuzzle.Presentation
                 yield return null;
             }
 
+            // Released only NOW, after the removal animation has finished. Releasing at the
+            // moment the block died would let refill hand the same GameObject straight back
+            // out while this loop was still shrinking and fading it -- the new block would
+            // visibly dissolve on arrival.
             foreach (BlockView view in dyingBlocks)
             {
-                Destroy(view.gameObject);
+                ReleaseView(view);
             }
 
             foreach (CrateView view in dyingCrates)
@@ -442,8 +471,8 @@ namespace BlastPuzzle.Presentation
             }
         }
 
-        // Removes the views showing these blocks, one at a time, without rebuilding the
-        // rest of the board. Blocks with no view (already removed) are simply skipped.
+        // Removes the views showing these blocks immediately, without rebuilding the rest
+        // of the board and without animating. Blocks with no view are simply skipped.
         public void RemoveViews(IEnumerable<Block> blocks)
         {
             foreach (Block block in blocks)
@@ -453,33 +482,37 @@ namespace BlastPuzzle.Presentation
                     continue;
                 }
 
-                // Drop the dictionary entry FIRST. Destroy only tears the GameObject down at
-                // the end of the frame, so a surviving entry would keep handing out a view
-                // that is about to vanish -- and would keep the dead Block reachable, so
-                // ViewCount would drift away from the board's occupied count.
+                // Drop the dictionary entry FIRST. The view is about to go back into the
+                // pool and can be handed straight out to a different Block, so a surviving
+                // entry would map a dead Block to a view that now belongs to a live one --
+                // and ViewCount would drift away from the board's occupied count.
                 viewsByBlock.Remove(block);
 
-                if (view != null)
-                {
-                    Destroy(view.gameObject);
-                }
+                ReleaseView(view);
             }
         }
 
-        // Destroys every view this component created and forgets them.
+        // Returns every view this component created to the pool and forgets them.
         public void Clear()
         {
-            foreach (BlockView view in viewsByBlock.Values)
+            // Copy first: releasing mutates nothing here, but clearing the dictionary while
+            // enumerating it would throw, and a rebuild for a different level runs exactly
+            // this path.
+            releaseBuffer.Clear();
+            releaseBuffer.AddRange(viewsByBlock.Values);
+            viewsByBlock.Clear();
+
+            foreach (BlockView view in releaseBuffer)
             {
-                if (view != null)
-                {
-                    // Destroy is deferred to the end of the frame, so these objects are
-                    // still children for the rest of this frame. Harmless while Build is
-                    // called once; worth remembering if a rebuild ever counts children.
-                    Destroy(view.gameObject);
-                }
+                ReleaseView(view);
             }
 
+            releaseBuffer.Clear();
+
+            // Crates are still destroyed. There are a handful per level and they never
+            // respawn during play, so pooling them would add a second lifecycle to reason
+            // about in exchange for almost no churn. Worth revisiting only if profiling
+            // ever shows crate churn mattering.
             foreach (CrateView view in crateViewsByPosition.Values)
             {
                 if (view != null)
@@ -488,7 +521,6 @@ namespace BlastPuzzle.Presentation
                 }
             }
 
-            viewsByBlock.Clear();
             crateViewsByPosition.Clear();
             board = null;
         }
@@ -571,13 +603,69 @@ namespace BlastPuzzle.Presentation
             crateViewsByPosition.Add(position, view);
         }
 
+        // Inactive pooled GameObjects are children of this transform, so Unity destroys them
+        // with it. Clearing the pool explicitly keeps that intent obvious and releases the
+        // stack immediately rather than at scene teardown.
+        private void OnDestroy()
+        {
+            viewPool?.Clear();
+        }
+
         private static string ViewName(BoardPosition position) =>
             $"Block_r{position.Row}_c{position.Column}";
 
+        // Lazily built, so it can be sized from the board once one exists.
+        private ObjectPool<BlockView> Pool => viewPool ??= CreatePool();
+
+        private ObjectPool<BlockView> CreatePool()
+        {
+            // A full board is the steady-state demand. Double it for headroom: during a move
+            // the removed views are still animating out while the refill views are being
+            // taken, so both generations are briefly alive at once.
+            int cells = board != null ? board.Rows * board.Columns : DefaultPoolCapacity;
+
+            return new ObjectPool<BlockView>(
+                createFunc: InstantiateBlockView,
+                actionOnGet: view => view.gameObject.SetActive(true),
+                actionOnRelease: view =>
+                {
+                    view.PrepareForPool();
+                    view.gameObject.SetActive(false);
+                },
+                actionOnDestroy: view =>
+                {
+                    if (view != null)
+                    {
+                        Destroy(view.gameObject);
+                    }
+                },
+                // Fails loudly on a double release rather than silently corrupting the pool.
+                collectionCheck: true,
+                defaultCapacity: cells,
+                maxSize: cells * 2);
+        }
+
+        // The ONLY place a BlockView GameObject is instantiated.
+        private BlockView InstantiateBlockView()
+        {
+            TotalViewsCreated++;
+            return Instantiate(blockPrefab, transform);
+        }
+
+        private void ReleaseView(BlockView view)
+        {
+            if (view != null)
+            {
+                Pool.Release(view);
+            }
+        }
+
         private BlockView CreateViewFor(Block block, BoardPosition position)
         {
-            // Instantiate copies the prefab into the scene as a child of this transform.
-            BlockView view = Instantiate(blockPrefab, transform);
+            // Get returns a recycled view when one is available and only instantiates when
+            // the pool is empty. Bind then overwrites every piece of visual state, so a view
+            // that previously showed a bomb cannot bring anything of that life with it.
+            BlockView view = Pool.Get();
             view.Bind(block, position);
 
             // The single place a new view's starting position is decided. Milestone 14 can

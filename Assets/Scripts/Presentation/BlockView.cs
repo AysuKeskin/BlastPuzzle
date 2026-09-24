@@ -44,10 +44,21 @@ namespace BlastPuzzle.Presentation
         // fade without losing the colour.
         private Color tint;
 
+        // The ONE entry point for putting a block on screen, used by the initial build, by
+        // refill and by power-up creation alike.
+        //
+        // Since views are recycled, Bind must leave NO trace of the view's previous life.
+        // Everything any animation can change -- scale, alpha, rotation, icon -- is written
+        // here unconditionally rather than only when it differs, so a bomb's view reused as
+        // an ordinary blue block cannot keep the bomb icon, a half-faded alpha or the shrunk
+        // scale it died at.
         public void Bind(Block block, BoardPosition position)
         {
             Block = block;
             Position = position;
+
+            transform.localScale = Vector3.one;
+            transform.localRotation = Quaternion.identity;
 
             // Power-ups keep the colour of the group that made them, so the tint is the
             // same code path for every kind; only the overlay differs.
@@ -55,6 +66,26 @@ namespace BlastPuzzle.Presentation
             spriteRenderer.color = tint;
 
             ShowIconFor(block);
+        }
+
+        // Called just before the view goes back to the pool.
+        //
+        // Clearing Block matters as much as the visual reset: a pooled view that still
+        // referenced its old block would keep that dead object alive and make any stray
+        // lookup look successful.
+        public void PrepareForPool()
+        {
+            Block = null;
+
+            transform.localScale = Vector3.one;
+            transform.localRotation = Quaternion.identity;
+
+            tint = Color.white;
+            spriteRenderer.color = Color.white;
+
+            iconRenderer.sprite = null;
+            iconRenderer.color = Color.white;
+            iconRenderer.enabled = false;
         }
 
         // One prefab renders all three kinds. A second prefab per power-up would duplicate
@@ -72,6 +103,9 @@ namespace BlastPuzzle.Presentation
 
             iconRenderer.sprite = icon;
             iconRenderer.enabled = icon != null;
+
+            // Full opacity again: a removal fade lowers this, and the view may be reused.
+            iconRenderer.color = Color.white;
         }
 
         // Position is set separately from Bind because later milestones move a block

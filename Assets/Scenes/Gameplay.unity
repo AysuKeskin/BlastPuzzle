@@ -515,6 +515,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 36279be0c9c344d3197d37f0b42fec76, type: 3}
   m_Name: 
   m_EditorClassIdentifier: BlastPuzzle.Runtime::BlastPuzzle.Gameplay.GameplayController
+  minimumGroupSize: 2
+  boardView: {fileID: 1576365669}
 --- !u!1 &1652604316
 GameObject:
   m_ObjectHideFlags: 0

@@ -40,5 +40,14 @@ namespace BlastPuzzle.Presentation
         {
             transform.localPosition = localPosition;
         }
+
+        // Gravity moving this view. Updates the cached coordinate and the transform in one
+        // call so the two cannot drift apart -- the block is the same object throughout,
+        // only the cell it occupies changed.
+        public void MoveTo(BoardPosition position, Vector3 localPosition)
+        {
+            Position = position;
+            transform.localPosition = localPosition;
+        }
     }
 }

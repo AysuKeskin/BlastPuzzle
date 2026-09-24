@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using BlastPuzzle.Blocks;
 using BlastPuzzle.Boards;
 
@@ -19,6 +20,18 @@ namespace BlastPuzzle.Levels
     // Plain C#: it builds domain objects, so it has no business knowing Unity.
     public static class DemoBoardFactory
     {
+        // TEMPORARY: the colours this board may spawn. Milestone 10 moves this onto
+        // LevelDefinition, where each level picks its own palette. It lives here rather than
+        // inside RefillResolver so the resolver never has to know which game it is filling.
+        public static readonly IReadOnlyList<BlockColor> AvailableColors = new[]
+        {
+            BlockColor.Red,
+            BlockColor.Blue,
+            BlockColor.Green,
+            BlockColor.Yellow,
+            BlockColor.Purple
+        };
+
         private const char EmptyCell = '.';
 
         // Written TOP ROW FIRST, the way the board looks on screen. Row 0 is the bottom,

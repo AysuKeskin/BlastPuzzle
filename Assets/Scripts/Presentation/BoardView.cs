@@ -60,7 +60,64 @@ namespace BlastPuzzle.Presentation
                         continue;
                     }
 
-                    CreateViewFor(cell);
+                    CreateViewFor(cell.Block, cell.Position);
+                }
+            }
+        }
+
+        // Moves existing views to the cells their blocks now occupy.
+        //
+        // No view is created and none is destroyed: these are the same objects, found by
+        // Block identity, being repositioned. The board has ALREADY settled by the time
+        // this runs -- these moves describe what happened, they do not cause it.
+        public void ApplyMoves(IEnumerable<BlockMove> moves)
+        {
+            foreach (BlockMove move in moves)
+            {
+                if (!viewsByBlock.TryGetValue(move.Block, out BlockView view) || view == null)
+                {
+                    continue;
+                }
+
+                view.MoveTo(move.To, BoardPositionToLocalPosition(move.To));
+                view.name = ViewName(move.To);
+            }
+        }
+
+        // Creates one view per newly spawned Block.
+        //
+        // Only the new blocks get views: everything that survived gravity keeps the view it
+        // already had, repositioned by ApplyMoves. Recreating survivors would throw away
+        // objects that are already correct and, worse, break the Block -> BlockView identity
+        // that the rest of the presentation layer depends on.
+        public void AddViews(IEnumerable<BlockSpawn> spawns)
+        {
+            foreach (BlockSpawn spawn in spawns)
+            {
+                CreateViewFor(spawn.Block, spawn.Position);
+            }
+        }
+
+        // Removes the views showing these blocks, one at a time, without rebuilding the
+        // rest of the board. Blocks with no view (already removed) are simply skipped.
+        public void RemoveViews(IEnumerable<Block> blocks)
+        {
+            foreach (Block block in blocks)
+            {
+                if (!viewsByBlock.TryGetValue(block, out BlockView view))
+                {
+                    continue;
+                }
+
+                // Drop the dictionary entry FIRST. Destroy only tears the GameObject down at
+                // the end of the frame, so a surviving entry would keep handing out a view
+                // that is about to vanish -- and would keep the dead Block reachable, so
+                // ViewCount would drift away from the board's occupied count.
+                viewsByBlock.Remove(block);
+
+                if (view != null)
+                {
+                    Destroy(view.gameObject);
                 }
             }
         }
@@ -149,18 +206,25 @@ namespace BlastPuzzle.Presentation
 
         public int ViewCount => viewsByBlock.Count;
 
-        private void CreateViewFor(Cell cell)
+        private static string ViewName(BoardPosition position) =>
+            $"Block_r{position.Row}_c{position.Column}";
+
+        private void CreateViewFor(Block block, BoardPosition position)
         {
             // Instantiate copies the prefab into the scene as a child of this transform.
             BlockView view = Instantiate(blockPrefab, transform);
-            view.Bind(cell.Block, cell.Position);
-            view.SetLocalPosition(BoardPositionToLocalPosition(cell.Position));
+            view.Bind(block, position);
+
+            // The single place a new view's starting position is decided. Milestone 14 can
+            // start it above the board and animate it down to here, and nothing outside this
+            // class -- least of all RefillResolver -- needs to know.
+            view.SetLocalPosition(BoardPositionToLocalPosition(position));
 
             // Naming generated objects after their coordinate makes the live hierarchy
             // readable while debugging.
-            view.name = $"Block_r{cell.Position.Row}_c{cell.Position.Column}";
+            view.name = ViewName(position);
 
-            viewsByBlock.Add(cell.Block, view);
+            viewsByBlock.Add(block, view);
         }
     }
 }

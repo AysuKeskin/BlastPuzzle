@@ -15,6 +15,19 @@ namespace BlastPuzzle.Presentation
         [SerializeField]
         private SpriteRenderer spriteRenderer;
 
+        [Tooltip("Overlay drawn on top of the tinted square for power-ups. Hidden for normal blocks.")]
+        [SerializeField]
+        private SpriteRenderer iconRenderer;
+
+        [SerializeField]
+        private Sprite rocketHorizontalIcon;
+
+        [SerializeField]
+        private Sprite rocketVerticalIcon;
+
+        [SerializeField]
+        private Sprite bombIcon;
+
         // Which logical Block this view currently stands for.
         public Block Block { get; private set; }
 
@@ -27,11 +40,38 @@ namespace BlastPuzzle.Presentation
         public BoardPosition Position { get; private set; }
 
         // Point this view at a logical block and take on its appearance.
+        // The tint this view was bound with, kept so alpha can be changed during a removal
+        // fade without losing the colour.
+        private Color tint;
+
         public void Bind(Block block, BoardPosition position)
         {
             Block = block;
             Position = position;
-            spriteRenderer.color = BlockColorPalette.ToDisplayColor(block.Color);
+
+            // Power-ups keep the colour of the group that made them, so the tint is the
+            // same code path for every kind; only the overlay differs.
+            tint = BlockColorPalette.ToDisplayColor(block.Color);
+            spriteRenderer.color = tint;
+
+            ShowIconFor(block);
+        }
+
+        // One prefab renders all three kinds. A second prefab per power-up would duplicate
+        // the square, the collider-free setup and the naming for the sake of one sprite.
+        private void ShowIconFor(Block block)
+        {
+            Sprite icon = block.Kind switch
+            {
+                BlockKind.Rocket => block.Direction == RocketDirection.Horizontal
+                    ? rocketHorizontalIcon
+                    : rocketVerticalIcon,
+                BlockKind.Bomb => bombIcon,
+                _ => null
+            };
+
+            iconRenderer.sprite = icon;
+            iconRenderer.enabled = icon != null;
         }
 
         // Position is set separately from Bind because later milestones move a block
@@ -41,13 +81,49 @@ namespace BlastPuzzle.Presentation
             transform.localPosition = localPosition;
         }
 
-        // Gravity moving this view. Updates the cached coordinate and the transform in one
-        // call so the two cannot drift apart -- the block is the same object throughout,
-        // only the cell it occupies changed.
-        public void MoveTo(BoardPosition position, Vector3 localPosition)
+        // The cached coordinate is updated the moment the BOARD changes, separately from the
+        // transform, which then animates toward it. During a fall the view already reports
+        // the cell it logically occupies while its sprite is still travelling -- which is
+        // what keeps "is every view at its block's cell?" answerable mid-animation.
+        public void SetBoardPosition(BoardPosition position)
         {
             Position = position;
-            transform.localPosition = localPosition;
+        }
+
+        // --- animation primitives -------------------------------------------------------
+        //
+        // Deliberately plain setters rather than coroutines. BoardView drives every view
+        // from one batch loop, so a view only needs to be told what to look like this frame;
+        // it owns no timing, no easing and no sequencing, and therefore no gameplay rules.
+
+        public void SetScale(float scale)
+        {
+            transform.localScale = new Vector3(scale, scale, 1f);
+        }
+
+        public void SetAlpha(float alpha)
+        {
+            spriteRenderer.color = new Color(tint.r, tint.g, tint.b, alpha);
+
+            if (iconRenderer.enabled)
+            {
+                Color icon = iconRenderer.color;
+                iconRenderer.color = new Color(icon.r, icon.g, icon.b, alpha);
+            }
+        }
+
+        // Puts the view back to its resting appearance, used as the explicit snap at the end
+        // of every animation so nothing drifts on floating-point rounding.
+        public void ResetAppearance()
+        {
+            transform.localScale = Vector3.one;
+            spriteRenderer.color = tint;
+
+            if (iconRenderer.enabled)
+            {
+                Color icon = iconRenderer.color;
+                iconRenderer.color = new Color(icon.r, icon.g, icon.b, 1f);
+            }
         }
     }
 }

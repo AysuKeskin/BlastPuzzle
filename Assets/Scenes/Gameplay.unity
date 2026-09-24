@@ -436,6 +436,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: BlastPuzzle.Runtime::BlastPuzzle.Presentation.BoardView
   blockPrefab: {fileID: 5160738677774207353, guid: 483870aad716e45ec9e4ca502d37d22b, type: 3}
+  cratePrefab: {fileID: 7239023298624940787, guid: 275ec6f54ab13496280630ac532880af, type: 3}
   cellSize: 1
   spacing: 0.05
 --- !u!1 &1606153323
@@ -485,6 +486,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlastPuzzle.Core.GameBootstrap
   logStartup: 1
+  levelDefinition: {fileID: 11400000, guid: 8b06ea7735a664a0dae34fe1cfd7fed4, type: 2}
   boardView: {fileID: 1576365669}
   gameplayController: {fileID: 1606153327}
 --- !u!114 &1606153326

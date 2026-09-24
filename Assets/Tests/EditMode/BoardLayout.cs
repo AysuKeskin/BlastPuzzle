@@ -1,6 +1,7 @@
 using System;
 using BlastPuzzle.Blocks;
 using BlastPuzzle.Boards;
+using BlastPuzzle.Obstacles;
 
 namespace BlastPuzzle.Tests.EditMode
 {
@@ -12,6 +13,14 @@ namespace BlastPuzzle.Tests.EditMode
     internal static class BoardLayout
     {
         internal const char EmptyCell = '.';
+        internal const char CrateCell = 'C';
+
+        // Power-ups, so a test board can place one without a blast:
+        //   H = horizontal Rocket, V = vertical Rocket, X = Bomb
+        // All are tinted Red; the colour is irrelevant to their behaviour.
+        internal const char HorizontalRocketCell = 'H';
+        internal const char VerticalRocketCell = 'V';
+        internal const char BombCell = 'X';
 
         internal static Board Build(params string[] rowsTopFirst)
         {
@@ -45,7 +54,28 @@ namespace BlastPuzzle.Tests.EditMode
                         continue;
                     }
 
-                    board.SetBlock(new BoardPosition(row, column), new Block(ToColor(symbol)));
+                    if (symbol == CrateCell)
+                    {
+                        board.PlaceObstacle(new BoardPosition(row, column), new Obstacle(ObstacleType.Crate));
+                        continue;
+                    }
+
+                    var at = new BoardPosition(row, column);
+
+                    switch (symbol)
+                    {
+                        case HorizontalRocketCell:
+                            board.SetBlock(at, Block.CreateRocket(BlockColor.Red, RocketDirection.Horizontal));
+                            continue;
+                        case VerticalRocketCell:
+                            board.SetBlock(at, Block.CreateRocket(BlockColor.Red, RocketDirection.Vertical));
+                            continue;
+                        case BombCell:
+                            board.SetBlock(at, Block.CreateBomb(BlockColor.Red));
+                            continue;
+                    }
+
+                    board.SetBlock(at, Block.CreateNormal(ToColor(symbol)));
                 }
             }
 

@@ -74,7 +74,7 @@ namespace BlastPuzzle.Levels
                         continue;
                     }
 
-                    board.SetBlock(new BoardPosition(row, column), new Block(ToColor(symbol)));
+                    board.SetBlock(new BoardPosition(row, column), Block.CreateNormal(ToColor(symbol)));
                 }
             }
 

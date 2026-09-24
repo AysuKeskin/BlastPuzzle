@@ -39,7 +39,7 @@ namespace BlastPuzzle.Gameplay
         // "down" means toward lower indices and the lowest free slot is found first).
         //
         //   readRow  - the cell currently being examined
-        //   writeRow - the lowest row that has not been filled yet
+        //   writeRow - the lowest row in the CURRENT SEGMENT that has not been filled yet
         //
         // writeRow only advances when a block is placed, so it always trails or equals
         // readRow. That single fact gives three guarantees at once:
@@ -50,13 +50,29 @@ namespace BlastPuzzle.Gameplay
         //     can be overwritten before it is moved;
         //   * blocks are placed in the order they are found, so their vertical order within
         //     the column is preserved -- nothing can fall past anything else.
+        //
+        // OBSTACLES SPLIT THE COLUMN. A crate is fixed and solid, so blocks above it cannot
+        // fall past it. Meeting one, the write pointer jumps to just above it, which starts
+        // a fresh segment: the crate becomes the floor for everything above, while whatever
+        // is below it has already settled on its own. One pass still handles a column with
+        // any number of crates, because each simply restarts the pointer.
         private static void CompactColumn(Board board, int column, List<BlockMove> moves)
         {
             int writeRow = 0;
 
             for (int readRow = 0; readRow < board.Rows; readRow++)
             {
-                if (board.GetCell(readRow, column).IsEmpty)
+                Cell cell = board.GetCell(readRow, column);
+
+                if (cell.HasObstacle)
+                {
+                    // Solid floor. The next segment starts immediately above it, and the
+                    // obstacle itself is never moved or recorded as a move.
+                    writeRow = readRow + 1;
+                    continue;
+                }
+
+                if (!cell.HasBlock)
                 {
                     continue;
                 }

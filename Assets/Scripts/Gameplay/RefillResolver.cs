@@ -56,6 +56,9 @@ namespace BlastPuzzle.Gameplay
                 {
                     var position = new BoardPosition(row, column);
 
+                    // IsEmpty means "nothing here at all", so a crate cell is skipped
+                    // without any obstacle-specific branch: a crate is not an empty block
+                    // slot waiting to be filled, it is the cell's occupant.
                     if (!board.GetCell(position).IsEmpty)
                     {
                         continue;
@@ -65,7 +68,7 @@ namespace BlastPuzzle.Gameplay
                     // a game object in its own right, and reusing the instance would hand the
                     // presentation layer a key it may still associate with a dead view.
                     BlockColor color = availableColors[random.Next(availableColors.Count)];
-                    var block = new Block(color);
+                    Block block = Block.CreateNormal(color);
 
                     board.SetBlock(position, block);
                     spawns.Add(new BlockSpawn(block, position));

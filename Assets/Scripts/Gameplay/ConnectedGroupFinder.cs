@@ -40,7 +40,12 @@ namespace BlastPuzzle.Gameplay
 
             Cell startCell = board.GetCell(start);
 
-            if (startCell.IsEmpty)
+            // HasBlock, not !IsEmpty: a crate cell is not empty but holds no block, so
+            // tapping one starts no group.
+            //
+            // IsNormal too: a Rocket or Bomb is a Block, but it is not a member of a colour
+            // group. Tapping one is an activation, which the controller handles separately.
+            if (!startCell.HasBlock || !startCell.Block.IsNormal)
             {
                 return NoGroup;
             }
@@ -62,7 +67,17 @@ namespace BlastPuzzle.Gameplay
 
                 foreach (Cell neighbour in board.GetOrthogonalNeighbours(current))
                 {
-                    if (neighbour.IsEmpty || neighbour.Block.Color != targetColor)
+                    // Three ways a neighbour fails to join, all in one test:
+                    //   no block at all  -- an empty cell or a crate
+                    //   not Normal       -- a Rocket or Bomb, even one tinted the same colour
+                    //   wrong colour
+                    //
+                    // The IsNormal clause is why a power-up BREAKS a colour group: in
+                    // "R R [Rocket] R" the search cannot step through the rocket, so the
+                    // Reds either side are separate groups. As with crates, no
+                    // power-up-specific branch is needed anywhere else in the search.
+                    if (!neighbour.HasBlock || !neighbour.Block.IsNormal ||
+                        neighbour.Block.Color != targetColor)
                     {
                         continue;
                     }

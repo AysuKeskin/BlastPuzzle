@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using BlastPuzzle.Blocks;
+using BlastPuzzle.Obstacles;
 
 namespace BlastPuzzle.Boards
 {
@@ -87,7 +88,50 @@ namespace BlastPuzzle.Boards
         // Mutation goes through the Board so that the coordinate is validated in one
         // place, and so a future milestone has a single choke point to hook if the
         // board ever needs to raise change notifications.
-        public void SetBlock(BoardPosition position, Block block) => GetCell(position).SetBlock(block);
+        public void SetBlock(BoardPosition position, Block block)
+        {
+            Cell cell = GetCell(position);
+
+            // The Cell invariant: a crate occupies the cell itself, so a block can never
+            // share it. Refusing here means a bug surfaces at the mistake rather than as a
+            // block mysteriously rendered underneath a crate.
+            if (cell.HasObstacle)
+            {
+                throw new InvalidOperationException($"Cannot place a block at {position}: it holds {cell.Obstacle}.");
+            }
+
+            cell.SetBlock(block);
+        }
+
+        // Obstacles are placed once, at level start, and never move.
+        public void PlaceObstacle(BoardPosition position, Obstacle obstacle)
+        {
+            if (obstacle == null)
+            {
+                throw new ArgumentNullException(nameof(obstacle));
+            }
+
+            Cell cell = GetCell(position);
+
+            if (!cell.IsEmpty)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot place an obstacle at {position}: the cell already holds {(cell.HasBlock ? (object)cell.Block : cell.Obstacle)}.");
+            }
+
+            cell.SetObstacle(obstacle);
+        }
+
+        // Returns what was removed, or null if there was no obstacle there.
+        public Obstacle RemoveObstacle(BoardPosition position)
+        {
+            Cell cell = GetCell(position);
+            Obstacle removed = cell.Obstacle;
+            cell.RemoveObstacle();
+            return removed;
+        }
+
+        public Obstacle GetObstacle(BoardPosition position) => GetCell(position).Obstacle;
 
         // Moves the exact Block instance from one cell to another.
         //
@@ -103,7 +147,7 @@ namespace BlastPuzzle.Boards
             Cell source = GetCell(from);
             Cell destination = GetCell(to);
 
-            if (source.IsEmpty)
+            if (!source.HasBlock)
             {
                 throw new InvalidOperationException($"There is no block at {from} to move.");
             }
@@ -115,9 +159,11 @@ namespace BlastPuzzle.Boards
                 return source.Block;
             }
 
+            // IsEmpty excludes crate cells, so this also prevents a block being moved
+            // into an obstacle.
             if (!destination.IsEmpty)
             {
-                throw new InvalidOperationException($"Cannot move to {to}: that cell already holds a block.");
+                throw new InvalidOperationException($"Cannot move to {to}: that cell is not empty.");
             }
 
             Block moved = source.Block;

@@ -27,6 +27,10 @@ namespace BlastPuzzle.Gameplay
         [SerializeField]
         private BoardView boardView;
 
+        [Tooltip("Optional. Sound and haptics for events this controller has already decided.")]
+        [SerializeField]
+        private GameFeedback feedback;
+
         private Board board;
         private IReadOnlyList<BlockColor> availableColors;
         private System.Random random;
@@ -159,10 +163,12 @@ namespace BlastPuzzle.Gameplay
             if (state == GameplayState.Won)
             {
                 Debug.Log("LEVEL WON");
+                feedback?.PlayWin();
             }
             else if (state == GameplayState.Lost)
             {
                 Debug.Log("LEVEL LOST");
+                feedback?.PlayLose();
             }
         }
 
@@ -191,6 +197,27 @@ namespace BlastPuzzle.Gameplay
                 Debug.Log($"Activated power-up: removed {result.RemovedBlocks.Count} blocks, "
                     + $"{result.RemovedObstacles.Count} crates"
                     + $" | Moves remaining: {MovesRemaining} | {goalTracker}");
+
+                // FEEDBACK for the piece the PLAYER activated. Other power-ups caught in the
+                // footprint were removed, not fired, so they get no activation sound -- the
+                // same distinction the no-chain rule makes in gameplay.
+                if (feedback != null)
+                {
+                    // Explicit cases rather than "Rocket, else Bomb": a third power-up kind
+                    // would otherwise silently play the bomb sound instead of being noticed.
+                    switch (powerUp.Kind)
+                    {
+                        case BlockKind.Rocket:
+                            feedback.PlayRocketActivation();
+                            break;
+
+                        case BlockKind.Bomb:
+                            feedback.PlayBombActivation();
+                            break;
+                    }
+
+                    feedback.PlayCrateBreak(result.RemovedObstacles.Count);
+                }
 
                 // VISUALS, in order. Each phase runs to completion before the next begins.
                 yield return boardView.AnimateActivation(powerUp);
@@ -245,6 +272,16 @@ namespace BlastPuzzle.Gameplay
                 Debug.Log($"Removed {removed.Count} blocks, {crates.Count} crates"
                     + (powerUp != null ? $", created {powerUp} at r{selected.Row} c{selected.Column}" : string.Empty)
                     + $" | Moves remaining: {MovesRemaining} | {goalTracker}");
+
+                // FEEDBACK. Fire-and-forget, alongside the animation rather than before it:
+                // audio is non-blocking, so nothing here waits for a clip to finish.
+                // One blast sound per player action regardless of group size, and one crate
+                // sound for the whole batch however many crates broke.
+                if (feedback != null)
+                {
+                    feedback.PlayBlast(removed.Count);
+                    feedback.PlayCrateBreak(crates.Count);
+                }
 
                 // VISUALS. Blocks and crates die together, so a crate is gone from screen
                 // before anything falls through the cell it occupied.

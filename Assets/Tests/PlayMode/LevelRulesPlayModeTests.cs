@@ -108,6 +108,33 @@ namespace BlastPuzzle.Tests.PlayMode
             return new BoardPosition(-1, -1);
         }
 
+
+        // Resolution is now animated, so a move finishes over several frames. Tests wait for
+        // the controller to leave ResolvingMove rather than for a fixed duration -- no
+        // WaitForSeconds guesses, and no dependence on frame counts. The timeout means a
+        // sequence that never completes fails the test instead of hanging the run.
+        private IEnumerator WaitUntilResolved(float timeoutSeconds = 5f)
+        {
+            float deadline = Time.realtimeSinceStartup + timeoutSeconds;
+
+            while (controller.State == GameplayState.ResolvingMove)
+            {
+                if (Time.realtimeSinceStartup > deadline)
+                {
+                    Assert.Fail("Move resolution did not finish within " + timeoutSeconds + "s.");
+                }
+
+                yield return null;
+            }
+        }
+
+        // Taps, then waits for the whole animated sequence to finish.
+        private IEnumerator Tap(BoardPosition position)
+        {
+            controller.HandleBlockSelected(position);
+            yield return WaitUntilResolved();
+        }
+
         private static GoalTracker UnreachableGoal() =>
             new GoalTracker(new[] { new ColorGoal(BlockColor.Blue, 9999) });
 
@@ -118,7 +145,7 @@ namespace BlastPuzzle.Tests.PlayMode
             controller.Initialise(board, DemoColors(), new System.Random(1), 20, UnreachableGoal());
 
             int before = controller.MovesRemaining;
-            controller.HandleBlockSelected(LargestGroup(out _, out _));
+            yield return Tap(LargestGroup(out _, out _));
 
             Assert.That(controller.MovesRemaining, Is.EqualTo(before - 1));
             Assert.That(controller.State, Is.EqualTo(GameplayState.WaitingForInput));
@@ -139,7 +166,7 @@ namespace BlastPuzzle.Tests.PlayMode
 
             for (int expected = 19; expected >= 17; expected--)
             {
-                controller.HandleBlockSelected(LargestGroup(out _, out _));
+                yield return Tap(LargestGroup(out _, out _));
                 Assert.That(controller.MovesRemaining, Is.EqualTo(expected));
                 Assert.That(boardView.ViewCount + boardView.CrateViewCount,
                     Is.EqualTo(board.Rows * board.Columns));
@@ -160,7 +187,7 @@ namespace BlastPuzzle.Tests.PlayMode
             }
 
             int before = controller.MovesRemaining;
-            controller.HandleBlockSelected(isolated);
+            yield return Tap(isolated);
 
             Assert.That(controller.MovesRemaining, Is.EqualTo(before));
             Assert.That(controller.State, Is.EqualTo(GameplayState.WaitingForInput));
@@ -172,7 +199,7 @@ namespace BlastPuzzle.Tests.PlayMode
             yield return LoadScene();
             controller.Initialise(board, DemoColors(), new System.Random(1), 1, UnreachableGoal());
 
-            controller.HandleBlockSelected(LargestGroup(out _, out _));
+            yield return Tap(LargestGroup(out _, out _));
 
             Assert.That(controller.MovesRemaining, Is.Zero);
             Assert.That(controller.State, Is.EqualTo(GameplayState.Lost));
@@ -189,7 +216,7 @@ namespace BlastPuzzle.Tests.PlayMode
             var goals = new GoalTracker(new[] { new ColorGoal(color, size) });
             controller.Initialise(board, DemoColors(), new System.Random(1), 1, goals);
 
-            controller.HandleBlockSelected(target);
+            yield return Tap(target);
 
             Assert.That(controller.MovesRemaining, Is.Zero, "Moves are exhausted...");
             Assert.That(goals.AreAllGoalsComplete, Is.True, "...and the goal completed on that same move.");
@@ -206,7 +233,7 @@ namespace BlastPuzzle.Tests.PlayMode
             var goals = new GoalTracker(new[] { new ColorGoal(color, size) });
             controller.Initialise(board, DemoColors(), new System.Random(1), 5, goals);
 
-            controller.HandleBlockSelected(target);
+            yield return Tap(target);
 
             Assert.That(controller.State, Is.EqualTo(GameplayState.Won));
             Assert.That(controller.MovesRemaining, Is.EqualTo(4));
@@ -220,13 +247,13 @@ namespace BlastPuzzle.Tests.PlayMode
             BoardPosition target = LargestGroup(out int size, out BlockColor color);
             controller.Initialise(board, DemoColors(), new System.Random(1), 5,
                 new GoalTracker(new[] { new ColorGoal(color, size) }));
-            controller.HandleBlockSelected(target);
+            yield return Tap(target);
             Assert.That(controller.State, Is.EqualTo(GameplayState.Won));
 
             int movesAfterWin = controller.MovesRemaining;
             int viewsAfterWin = boardView.ViewCount;
 
-            controller.HandleBlockSelected(LargestGroup(out _, out _));
+            yield return Tap(LargestGroup(out _, out _));
 
             Assert.That(controller.State, Is.EqualTo(GameplayState.Won), "A won level stays won.");
             Assert.That(controller.MovesRemaining, Is.EqualTo(movesAfterWin));
@@ -239,11 +266,11 @@ namespace BlastPuzzle.Tests.PlayMode
             yield return LoadScene();
             controller.Initialise(board, DemoColors(), new System.Random(1), 1, UnreachableGoal());
 
-            controller.HandleBlockSelected(LargestGroup(out _, out _));
+            yield return Tap(LargestGroup(out _, out _));
             Assert.That(controller.State, Is.EqualTo(GameplayState.Lost));
 
             int viewsAfterLoss = boardView.ViewCount;
-            controller.HandleBlockSelected(LargestGroup(out _, out _));
+            yield return Tap(LargestGroup(out _, out _));
 
             Assert.That(controller.State, Is.EqualTo(GameplayState.Lost), "A lost level stays lost.");
             Assert.That(controller.MovesRemaining, Is.Zero, "Moves can never go below zero.");
@@ -303,7 +330,7 @@ namespace BlastPuzzle.Tests.PlayMode
             BoardPosition tapped = MakeRocketSizedGroup(0, BlockColor.Green);
             int before = controller.MovesRemaining;
 
-            controller.HandleBlockSelected(tapped);
+            yield return Tap(tapped);
 
             Assert.That(controller.MovesRemaining, Is.EqualTo(before - 1));
             Assert.That(boardView.ViewCount + boardView.CrateViewCount,
@@ -320,7 +347,7 @@ namespace BlastPuzzle.Tests.PlayMode
             PlaceBlock(at, Block.CreateRocket(BlockColor.Red, RocketDirection.Horizontal));
             int before = controller.MovesRemaining;
 
-            controller.HandleBlockSelected(at);
+            yield return Tap(at);
 
             Assert.That(controller.MovesRemaining, Is.EqualTo(before - 1));
             Assert.That(controller.State, Is.EqualTo(GameplayState.WaitingForInput));
@@ -338,7 +365,7 @@ namespace BlastPuzzle.Tests.PlayMode
             PlaceBlock(at, Block.CreateBomb(BlockColor.Red));
             int before = controller.MovesRemaining;
 
-            controller.HandleBlockSelected(at);
+            yield return Tap(at);
 
             Assert.That(controller.MovesRemaining, Is.EqualTo(before - 1));
             Assert.That(boardView.ViewCount + boardView.CrateViewCount,
@@ -354,7 +381,7 @@ namespace BlastPuzzle.Tests.PlayMode
             var at = new BoardPosition(4, 4);
             PlaceBlock(at, Block.CreateRocket(BlockColor.Blue, RocketDirection.Vertical));
 
-            controller.HandleBlockSelected(at);
+            yield return Tap(at);
 
             Assert.That(controller.State, Is.EqualTo(GameplayState.WaitingForInput));
             Assert.That(controller.MovesRemaining, Is.GreaterThan(0));
@@ -381,7 +408,7 @@ namespace BlastPuzzle.Tests.PlayMode
             var goals = new GoalTracker(new[] { new ColorGoal(BlockColor.Green, greens) });
             controller.Initialise(board, DemoColors(), new System.Random(1), 1, goals);
 
-            controller.HandleBlockSelected(at);
+            yield return Tap(at);
 
             Assert.That(controller.MovesRemaining, Is.Zero, "Moves exhausted...");
             Assert.That(goals.AreAllGoalsComplete, Is.True, "...and the goal completed on that move.");

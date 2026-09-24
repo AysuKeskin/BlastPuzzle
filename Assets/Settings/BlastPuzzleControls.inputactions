@@ -1,0 +1,57 @@
+{
+    "version": 1,
+    "name": "BlastPuzzleControls",
+    "maps": [
+        {
+            "name": "Gameplay",
+            "id": "f5f77951-d20f-47ca-92c0-94a57fc7f7db",
+            "actions": [
+                {
+                    "name": "Point",
+                    "type": "Value",
+                    "id": "88401a82-ad2f-46bb-a0b8-c4424cad7338",
+                    "expectedControlType": "Vector2",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true,
+                    "priority": 0
+                },
+                {
+                    "name": "Press",
+                    "type": "Button",
+                    "id": "f109844c-7257-4180-9423-ecf35d701800",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "42c77963-6794-4f32-abfc-6b124ffdbb75",
+                    "path": "<Pointer>/position",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Point",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "587778e7-c0da-4d49-af38-b80f4f68a99a",
+                    "path": "<Pointer>/press",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Press",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        }
+    ],
+    "controlSchemes": []
+}

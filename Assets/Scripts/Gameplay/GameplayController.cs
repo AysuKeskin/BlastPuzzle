@@ -264,29 +264,30 @@ namespace BlastPuzzle.Gameplay
         }
         private IEnumerator SettleBoard()
         {
+            // Resolve the complete route first; presentation plays it as one flow.
+            boardView.BeginSettlePlan();
             while (true)
             {
                 var moves = GravityResolver.ApplyGravity(board);
-                yield return boardView.AnimateMoves(moves);
+                boardView.PlanSettleMoves(moves);
                 var diagonal = GravityResolver.ApplyDiagonalGravity(board);
                 if (diagonal.Count > 0)
                 {
-                    yield return boardView.AnimateMoves(diagonal);
+                    boardView.PlanSettleMoves(diagonal);
                     continue;
                 }
                 // Replenish open columns, then let those real blocks flow around crates.
                 var incoming = RefillResolver.ApplyRefill(board, availableColors, random, topAccessibleOnly: true);
                 if (incoming.Count > 0)
                 {
-                    yield return boardView.AnimateSpawns(incoming);
+                    boardView.PlanSettleSpawns(incoming);
                     continue;
                 }
-                // Fully enclosed pockets have no physical entry. Retain a bounded fallback
-                // for authored layouts instead of leaving the board permanently incomplete.
-                var enclosed = RefillResolver.ApplyRefill(board, availableColors, random);
-                yield return boardView.AnimateSpawns(enclosed);
+                // No entry remains: leave enclosed cells empty until a later move
+                // opens a route. Never materialize a replacement beneath a crate.
                 break;
             }
+            yield return boardView.AnimateSettlePlan();
         }
     }
 }

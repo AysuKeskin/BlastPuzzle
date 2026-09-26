@@ -25,6 +25,47 @@ namespace BlastPuzzle.Tests.Integration
         }
 
         [UnityTest]
+        public IEnumerator EnclosedGap_StaysEmptyUntilRoofIsRemoved()
+        {
+            var board = new Board(3, 3);
+            var gap = new BoardPosition(1, 1);
+            var roof = new BoardPosition(2, 1);
+            for (int row = 0; row < 3; row++)
+                for (int col = 0; col < 3; col++)
+                {
+                    var position = new BoardPosition(row, col);
+                    if (position == gap) continue;
+                    if (position == roof || (row == 1 && col != 1))
+                        board.PlaceObstacle(position, new BlastPuzzle.Obstacles.Obstacle(BlastPuzzle.Obstacles.ObstacleType.Crate));
+                    else board.SetBlock(position, Block.CreateNormal(BlockColor.Blue));
+                }
+            var view = Object.FindFirstObjectByType<BoardView>();
+            var gameplay = Object.FindFirstObjectByType<GameplayController>();
+            view.Build(board);
+            gameplay.Initialise(board, new[] { BlockColor.Blue }, new System.Random(1), 20,
+                new GoalTracker(new[] { new ColorGoal(BlockColor.Blue, 1000) }));
+            var settle = typeof(GameplayController).GetMethod("SettleBoard", BindingFlags.NonPublic | BindingFlags.Instance);
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                yield return gameplay.StartCoroutine((IEnumerator)settle.Invoke(gameplay, null));
+                Assert.That(board.GetCell(gap).IsEmpty, Is.True);
+                Assert.That(view.ActiveViewCount, Is.EqualTo(5));
+            }
+            gameplay.HandleBlockSelected(gap);
+            Assert.That(gameplay.MovesRemaining, Is.EqualTo(20));
+            Assert.That(gameplay.State, Is.EqualTo(GameplayState.WaitingForInput));
+            BoardShuffleResolver.Shuffle(board, 2, new System.Random(2));
+            Assert.That(board.GetCell(gap).IsEmpty, Is.True);
+
+            board.RemoveObstacle(roof);
+            view.Build(board);
+            yield return gameplay.StartCoroutine((IEnumerator)settle.Invoke(gameplay, null));
+            Assert.That(board.GetCell(gap).HasBlock, Is.True, "Opening the roof must restore natural refill.");
+            Assert.That(view.ActiveViewCount, Is.EqualTo(7));
+            Assert.That(view.GetViewFor(board.GetCell(gap).Block).Position, Is.EqualTo(gap));
+        }
+
+        [UnityTest]
         public IEnumerator CoveredGap_SettlesUsingExistingBlocksAndKeepsPoolInSync()
         {
             var board = new Board(3, 3);
@@ -43,7 +84,26 @@ namespace BlastPuzzle.Tests.Integration
             var sourceLeft = board.GetCell(2, 0).Block;
             var sourceRight = board.GetCell(2, 2).Block;
             var settle = typeof(GameplayController).GetMethod("SettleBoard", BindingFlags.NonPublic | BindingFlags.Instance);
-            yield return gameplay.StartCoroutine((IEnumerator)settle.Invoke(gameplay, null));
+            var speed = typeof(BoardView).GetField("gravityPerCellDuration", BindingFlags.NonPublic | BindingFlags.Instance);
+            float originalSpeed = (float)speed.GetValue(view);
+            speed.SetValue(view, .5f); // Make the intermediate animation observable independent of normal timing.
+            try
+            {
+                var routine = gameplay.StartCoroutine((IEnumerator)settle.Invoke(gameplay, null));
+                var moved = board.GetCell(1, 1).Block;
+                var movedView = view.GetViewFor(moved);
+                int sourceColumn = moved == sourceLeft ? 0 : 2;
+                var incomingView = view.GetViewFor(board.GetCell(2, sourceColumn).Block);
+                Assert.That(incomingView, Is.Not.Null, "Refill must be planned before the diagonal animation finishes.");
+                Vector3 diagonalStart = movedView.transform.localPosition;
+                Vector3 incomingStart = incomingView.transform.localPosition;
+                yield return null;
+                Assert.That(movedView.transform.localPosition, Is.Not.EqualTo(diagonalStart));
+                Assert.That(incomingView.transform.localPosition.y, Is.LessThan(incomingStart.y),
+                    "Incoming blocks must follow while diagonal movement is still in progress.");
+                yield return routine;
+            }
+            finally { speed.SetValue(view, originalSpeed); }
             Assert.That(board.GetCell(1, 1).Block == sourceLeft || board.GetCell(1, 1).Block == sourceRight, Is.True);
             Assert.That(view.ActiveViewCount, Is.EqualTo(8));
             for (int row = 0; row < 3; row++)

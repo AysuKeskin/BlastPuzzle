@@ -1,66 +1,249 @@
 # BlastPuzzle
 
-A single-player, tap-to-blast puzzle game built with Unity 6000.6.0f1 and C#. Ten ScriptableObject levels share one gameplay scene.
+<img src="Docs/Images/gameplay.gif" alt="Level 3 played through: group blasts, a Rocket, a Bomb, crates breaking and the level-complete panel" width="300" align="right">
 
-## Run
+A portrait mobile 2D tap-to-blast puzzle game built in Unity 6 and C#. Players remove orthogonally connected groups of same-coloured blocks, complete level goals, break Crates and use Rocket and Bomb power-ups within a limited number of moves. There are ten handcrafted levels, a main menu and saved progression.
 
-1. Open this folder in Unity Hub using **6000.6.0f1** (the version in `ProjectSettings/ProjectVersion.txt`).
-2. Let Unity restore the packages and import the assets.
-3. Press Play, then select Play/Continue in the main menu. Editor Play Mode always starts from `Assets/Scenes/MainMenu.unity`, even when `Gameplay.unity` is open for editing. Builds also start from the main menu.
-4. Use a portrait Game view. Check both 1080×1920 and 1080×2400; the orthographic camera fits the board when the screen size changes.
+The engineering focus is:
 
-Click with a mouse or tap on a touch screen. Clear orthogonally connected groups of at least two matching blocks to advance the level's goals. Each valid action costs one move; invalid taps give visual feedback without spending a move.
+- a deterministic board simulation written in plain C#, separate from Unity presentation code;
+- data-driven levels authored as ScriptableObjects;
+- 183 automated EditMode and PlayMode tests;
+- pooled block views, with before and after measurements in the Unity Profiler.
 
-- Groups of 5–6 create a rocket; groups of 7 or more create a bomb.
-- Rockets clear a row or column. Bombs clear their cell and four orthogonal neighbours.
-- Tap a power-up to activate it. Power-ups hit by another power-up trigger a chain reaction, with an activation effect and sound for each.
-- Crates break from adjacent group blasts or direct power-up hits. After vertical gravity, existing upper-side blocks slide diagonally into reachable gaps below crates; open columns refill from above. Completely enclosed pockets retain a fallback refill. Blocks are clipped to the framed board boundary during entry.
-- Complete every goal before running out of moves. Use Retry after a loss, Next Level after a win, and Play Again after the final level.
-- A deadlocked board is shuffled without spending a move. If the bounded shuffle cannot find a valid arrangement, a separate no-matches retry prompt appears.
+This is a portfolio-scale project, not a shipped product.
 
-## Structure
+<br clear="right">
 
-| Area | Responsibility |
-| --- | --- |
-| `Core/GameFlowController` | Level selection, retry/next flow, persistent unlocks and save retries |
-| `Core/GameBootstrap` | Compose a fresh attempt from a level definition |
-| `Levels/LevelDefinition` | Authored dimensions, colours, goals, obstacles and move budget |
-| `Boards`, `Blocks`, `Goals`, `Gameplay/*Resolver`, `PowerUps` | Board data and gameplay rules; most are plain C# |
-| `Gameplay/GameplayController` | Sequence moves, animations and outcome evaluation |
-| `Presentation` | Pooled block views, camera framing, animation, audio and haptics |
-| `UI` | Event-driven uGUI/TextMeshPro HUD and result panels |
-| `Persistence` | Versioned local JSON progress and file I/O |
+## Gameplay
 
-Level assets are configuration. Each attempt creates a new board and goal tracker, leaving the assets unchanged. Block views are reused across refills and level transitions.
+1. Tap a block. If it belongs to an orthogonally connected group of **2 or more** normal blocks of the same colour, the whole group is removed and one move is spent. Smaller groups shake and cost nothing.
+2. Groups of **5–6** leave a **Rocket** on the tapped cell. The Rocket is horizontal if the group was at least as wide as it was tall, vertical otherwise. Groups of **7+** leave a **Bomb**.
+3. Tapping a power-up costs one move:
+   - A Rocket clears its whole row or column.
+   - A Bomb clears its own cell and the four orthogonal neighbours.
+   - A power-up caught in another blast fires too, as a chain reaction. Each power-up fires at most once per move.
+4. **Crates** are single-hit obstacles. A group blast breaks crates next to the removed cells; power-ups break crates in their footprint. Crates never fall, so gravity treats them as walls.
+5. **Gravity** has two steps. First, blocks fall straight down within the column segments between crates. Then blocks can slide one step diagonally into gaps under crates. Open columns refill from the top. A pocket completely enclosed by crates stays empty until a later move opens a way in.
+6. After everything settles, the level ends: **won** when every colour and crate goal is complete, **lost** when no moves remain. Otherwise play continues. If no valid move exists, the board is shuffled without spending a move. If a bounded shuffle cannot find a playable layout, the player is offered a retry.
 
-Progress lives in `player-progress.json` under `Application.persistentDataPath`. The highest unlocked level, save version, sound and vibration preferences are persisted; an in-progress board is not resumed. Saves use a temporary file before replacing the previous file. Failed writes stay pending and retry every five seconds of unscaled time, on level navigation, on wins, and on application pause/focus loss/quit, and before the gameplay scene is disabled. Persistence still requires a writable disk; pending progress cannot survive a forced shutdown if every write fails.
+| Menu | 8×8 board | Rocket | Bomb | Win | Loss |
+| --- | --- | --- | --- | --- | --- |
+| <img src="Docs/Images/main-menu.jpg" width="130"> | <img src="Docs/Images/gameplay-crates.jpg" width="130"> | <img src="Docs/Images/rocket.jpg" width="130"> | <img src="Docs/Images/bomb.jpg" width="130"> | <img src="Docs/Images/level-complete.jpg" width="130"> | <img src="Docs/Images/out-of-moves.jpg" width="130"> |
 
-## Tests
+*The GIF and screenshots were captured in Unity Editor Play Mode at 1080×1920. In the GIF, moves are chosen by a scripted test bot on a seeded board; the GIF is not a human playthrough.*
 
-In Unity, open **Window → General → Test Runner** and run the EditMode suite in `Assets/Tests/EditMode`. Run the PlayMode suite in `Assets/Tests/Integration` for settings input blocking, UI pointer isolation and chain-reaction feedback.
+## Features
 
-With Unity CLI installed and the project closed in the Editor:
+- Tap-to-blast with BFS group detection, vertical and diagonal gravity, and refill
+- Rocket and Bomb power-ups, with chain reactions between power-ups
+- Crate obstacles, and a crate goal alongside colour goals
+- Move limits, win/lose detection, Retry, Next Level, and Play Again after the final level
+- Deadlock detection and a bounded shuffle
+- 10 ScriptableObject levels (6×6 to 8×8, 3–5 colours)
+- Main menu, a shared settings panel (sound, vibration, reset progress) and a gameplay HUD
+- Local JSON save for unlocked level and preferences, written atomically with retries
+- Animations, particle VFX, sound effects and haptics
+- Pooled `BlockView` objects, and a sprite atlas for board pieces
+- Portrait layout with Safe Area support and camera fitting for different aspect ratios
 
-```sh
-unity test . --mode EditMode --output /tmp/blast-editmode.xml
+## Architecture
+
+The code is split into three layers, plus authored level configuration:
+
+- **Domain:** board rules in plain C#.
+- **Orchestration:** MonoBehaviours that sequence those rules and own the flow of a level.
+- **Presentation:** input, visuals and audio. It forwards taps and mirrors the board state, but never applies game rules itself.
+
+| Layer | Classes | Unity dependency |
+| --- | --- | --- |
+| Domain (`Boards`, `Blocks`, `Obstacles`, `Goals`, `PowerUps`, `Gameplay/*Resolver`) | `Board`, `Cell`, `Block`, `Obstacle`, `ConnectedGroupFinder`, `GroupRemover`, `GravityResolver`, `RefillResolver`, `ObstacleResolver`, `PowerUpRules`, `PowerUpResolver`, `GoalTracker`, `LevelOutcome`, `MoveAvailabilityChecker`, `BoardShuffleResolver` | None: no `UnityEngine` references |
+| Orchestration (`Core`, `Gameplay`, `Persistence`) | `GameFlowController`, `GameBootstrap`, `GameplayController`, `SaveService`, `SceneNavigator` | MonoBehaviours and file I/O |
+| Presentation (`Presentation`, `UI`) | `BoardView`, `BlockView`, `CrateView`, `BoardInputHandler`, `GameplayVFX`, `GameFeedback`, `GameplayHUD`, `MainMenuController`, `SettingsPanel`, `SafeAreaFitter` | Unity rendering, uGUI and TextMeshPro, audio |
+| Configuration (`Levels`) | `LevelDefinition`, `ColorGoalDefinition`, `ObstaclePlacement` | ScriptableObject and serialisation |
+
+```mermaid
+flowchart TD
+    Menu[MainMenuController] -->|load / reset| Save[SaveService]
+    Menu -->|"Play / Continue: loads Gameplay scene"| Flow
+    Save <-->|JSON| Progress[(PlayerProgressData)]
+
+    Flow[GameFlowController] -->|load on start, unlock on win| Save
+    Flow -->|current LevelDefinition| Boot[GameBootstrap]
+    Levels[(LevelDefinition assets)] --> Flow
+    Boot -->|new Board, GoalTracker, System.Random| GC[GameplayController]
+    Boot -->|Build board| BV
+
+    Input[BoardInputHandler] -->|HandleBlockSelected| GC
+    GC -->|mutates via resolvers| Domain["Domain: Board + resolvers + GoalTracker"]
+    GC -->|animate results| BV[BoardView → pooled BlockView / CrateView]
+    GC --> FX[GameplayVFX / GameFeedback]
+    GC -.->|GameplayChanged / StateChanged| HUD[GameplayHUD]
+    GC -.->|StateChanged| Flow
+    HUD -->|Retry / Next / Play Again| Flow
 ```
 
-Tests cover matching, gravity, refill, goals, power-ups, shuffle, save-file handling and controller rules. Camera framing, pooled views, scene navigation and HUD layout also need manual Play Mode verification; passing the EditMode suite alone does not verify these features.
+### Move resolution
 
-## Scope and portfolio presentation
+```mermaid
+flowchart TD
+    Tap[Tap] --> Guard{State is WaitingForInput?}
+    Guard -- no --> Drop[Ignore tap]
+    Guard -- yes --> Kind{Power-up?}
+    Kind -- yes --> PU["PowerUpResolver: footprint + chain,<br/>breaks crates in the footprint"]
+    Kind -- no --> Group{"Group size ≥ 2?"}
+    Group -- no --> Shake[Invalid-selection shake, no move spent]
+    Group -- yes --> Remove["GroupRemover → ObstacleResolver (adjacent crates)<br/>→ PowerUpRules (maybe create Rocket/Bomb)"]
+    PU --> Goals[Spend move, update GoalTracker]
+    Remove --> Goals
+    Goals --> Anim[Destruction / creation animations]
+    Anim --> Settle["Settle loop: vertical gravity → diagonal slides → top refill,<br/>planned first, then animated as one pass"]
+    Settle --> Outcome{LevelOutcome}
+    Outcome -- all goals done --> Won
+    Outcome -- no moves left --> Lost
+    Outcome -- continue --> Dead{Any valid move?}
+    Dead -- yes --> Wait[WaitingForInput]
+    Dead -- no --> Shuffle{Shuffle succeeded?}
+    Shuffle -- yes --> Wait
+    Shuffle -- no --> Blocked[Blocked: retry offered]
+```
 
-This is a local single-player project: there are no accounts, cloud saves or backend services. Level difficulty and win rates are not measured by the unit tests. Mobile input and haptics still need verification on a physical target device.
+The state leaves `WaitingForInput` before the first animation and returns only after the board has settled. Taps that arrive in between are dropped, not queued, so a move is never judged against a board that is still changing.
 
-Code was developed with AI assistance. When presenting the project, explain the systems you implemented or revised and the design decisions you can demonstrate. A gameplay recording is not included yet; a useful demo would show a normal blast, crate removal, a power-up, a win and a retry, alongside the test results.
+### Config, runtime and save state
 
-## Mobile builds
+| Kind | Where | Lifetime |
+| --- | --- | --- |
+| Authored configuration | `LevelDefinition` asset: size, move limit, colours, colour goals, crate placements and crate goal | Shared and never modified at runtime |
+| Attempt state | `Board`, `GoalTracker`, `MovesRemaining`, `GameplayState` | Built fresh by `GameBootstrap` for every attempt and discarded on retry or next level |
+| Player progression | `PlayerProgressData` in `player-progress.json` under `Application.persistentDataPath`: save version, highest unlocked level, sound and vibration flags | Persists between sessions; an in-progress board is not saved |
 
-Use **BlastPuzzle → Build** in the Editor:
+### Key decisions
 
-- **iOS Device Development**: debugging and profiler connection.
-- **iOS Device Release**: non-development export for a physical device.
-- **iOS Simulator Release**: non-development ARM64 Simulator export; restores Device SDK afterwards.
+- **Row 0 is the bottom row.** Gravity moves blocks toward lower row indices, and rows map directly to Unity's +Y axis, so there is no flipping between logic and screen coordinates.
+- **`Board` is the single source of truth.** Views only mirror the board. A `BlockView` is bound to a logical `Block` and can be recycled without affecting game state.
+- **Logical `Block`s are not pooled; `BlockView`s are.** `Block` is a small C# object whose identity matters to goals, moves and tests. Reusing blocks would mix up identity. `BlockView` is a GameObject that is expensive to instantiate, so `BoardView` keeps it in an `ObjectPool<BlockView>` sized to the board and resets its visual state on release. Crates are few and are not pooled.
+- **One injected `System.Random` per session.** `GameBootstrap` creates one `System.Random` and passes it to refill and shuffle. Tests pass a seeded instance, so layouts are reproducible. A quick retry never reuses a clock-seeded board.
+- **Deterministic resolution order.** Gravity, diagonal slides (with a fixed tie-break) and refill run in a fixed order. The whole settle route is planned on the board first, then animated in one pass.
+- **Save data stores progression, not boards.** This keeps the schema small and versioned. The save is written to a temporary file and then swapped in; failed writes stay pending and are retried.
 
-Exports go to `Builds/`. Open the generated `Unity-iPhone.xcodeproj` in Xcode. Physical devices require your own signing team. Do not commit generated builds.
+## Testing
 
-Mobile rendering targets 60 FPS; this is a policy, not a hardware benchmark. See [Milestone 22 audit](Docs/MILESTONE22.md) for changes, test evidence, remaining device checks and design explanations.
+Final run, 2026-09-26, Unity CLI batch mode: **EditMode 178/178, PlayMode 5/5, total 183/183 passed.**
+
+| Area | Tests |
+| --- | --- |
+| Group detection and removal (`ConnectedGroupFinder`, `GroupRemover`) | 20 |
+| Gravity (vertical and diagonal) and refill | 30 |
+| Power-up creation, Rocket, Bomb, chains, goal and group interaction | 38 |
+| Goals and level outcome | 14 |
+| Move availability and shuffle | 30 |
+| Controller rules (move spending, invalid taps, state guarding) | 12 |
+| Save/load: validation, corruption, versioning, atomic write, retry; settings persistence | 25 |
+| Mobile layout: safe area and camera fit at 9:16, 9:19.5 and 9:20 | 9 |
+| PlayMode integration: chain-reaction feedback, pooled views in sync after settling, enclosed gap stays empty, settings panel blocks input, UI tap does not spend a move | 5 |
+
+```sh
+# With the project closed in the Editor:
+unity test . --mode EditMode --output editmode.xml
+unity test . --mode PlayMode --output playmode.xml
+```
+
+You can also run both suites from **Window → General → Test Runner**.
+
+The negative save tests deliberately log warnings and errors (for example `Invalid player progress…` and `Could not save…`). Those log lines are expected; the tests still pass.
+
+## Performance
+
+Profiling was done in **Unity Editor Play Mode** with iOS as the build target. It was not done on a phone. A scripted, seeded scenario ran the same 40 moves on an 8×8 board with crates.
+
+- **No bottleneck was found.** Main-thread time was about 1 ms per frame. The player loop allocated about 100 B of GC per idle frame, all of it in engine and package code (URP, 2D Animation, Input System) and none in project scripts. The roughly 12.7 KB/frame recorded in Play Mode was Editor overhead.
+- **Change:** the 21 board-piece sprites (blocks, rockets, bombs, crate) were packed into one sprite atlas. In the same scenario:
+  - idle draw calls went from 28 to 20;
+  - idle batches went from 5 to 1;
+  - idle SetPass calls went from 16 to 12.
+
+  CPU time did not change measurably.
+- **Trade-off:** the 4096×2048 atlas has unused space, so texture memory for these sprites rises from about 2.5 MB to about 3.7 MB (ASTC 6×6 estimate).
+- **Unverified:** these are Editor measurements for comparison only. Frame rate, thermals and memory on a device have not been measured. The game sets `Application.targetFrameRate = 60` on mobile; this sets a target, it does not guarantee 60 FPS.
+
+## Mobile
+
+- Portrait only. Canvases use Scale With Screen Size at a 1080×1920 reference. A `SafeAreaFitter` keeps UI clear of notches and the home indicator.
+- The orthographic camera fits the board to the safe area minus the HUD, whatever the aspect ratio. This is covered by EditMode tests at 9:16, 9:19.5 and 9:20.
+- **Verified:** Unity Editor Game view at 1080×1920. An iOS Simulator Release export and an Xcode Simulator build succeeded during an earlier milestone (see [Docs/MILESTONE22.md](Docs/MILESTONE22.md)), but that build predates later changes.
+- **Not verified:** physical iPhone or Android hardware, haptics on a device, touch comfort, and Android builds.
+
+## Project structure
+
+```
+Assets/
+├── Art/          Sprites, atlas, VFX materials, UI and app icon
+├── Audio/SFX/    Blast, crate, rocket, bomb, win and lose sounds
+├── Editor/       iOS build menu and play-from-main-menu helper
+├── Prefabs/      BlockView, CrateView, GoalRow, SettingsPanel
+├── Scenes/       MainMenu, Gameplay
+├── ScriptableObjects/  BlockSprites and Levels/Level001–010
+├── Scripts/
+│   ├── Blocks/ Boards/ Obstacles/ Goals/ PowerUps/   domain model and rules
+│   ├── Gameplay/     GameplayController and the resolvers
+│   ├── Levels/       LevelDefinition and authoring types
+│   ├── Core/         GameFlowController, GameBootstrap, scene navigation
+│   ├── Persistence/  SaveService, PlayerProgressData
+│   ├── Presentation/ BoardView, BlockView, input, VFX, audio and haptics
+│   └── UI/           HUD, main menu, settings, safe area
+└── Tests/
+    ├── EditMode/     domain, save and layout tests
+    └── Integration/  PlayMode tests in the Gameplay scene
+Docs/             Screenshots and milestone audit notes
+```
+
+## Running the project
+
+1. Open the folder in Unity Hub with **Unity 6000.6.0f1**, the version in `ProjectSettings/ProjectVersion.txt`. Install the iOS Build Support module only if you want to build for iOS.
+2. Press **Play**. Editor Play Mode always starts from `Assets/Scenes/MainMenu.unity`, even while `Gameplay.unity` is open. Both scenes are in Build Settings, with MainMenu first.
+3. Use a portrait Game view, for example 1080×1920 or 1080×2400.
+
+**Controls:** tap on mobile, left-click in the Editor. The gear button opens settings. There are no keyboard controls.
+
+### iOS build
+
+Use **BlastPuzzle → Build** in the Editor. It has three entries:
+
+- **iOS Device Development**, with profiler connection;
+- **iOS Device Release**;
+- **iOS Simulator Release**.
+
+Each exports an Xcode project to `Builds/`. Open `Unity-iPhone.xcodeproj`, set your own signing team and run. Generated builds are git-ignored.
+
+## Known limitations
+
+- Performance and haptics have not been verified on a physical device; the profiling above comes from the Editor.
+- Crate is the only obstacle type, and it takes one hit.
+- Progression is linear across 10 levels; there is no level select.
+- A level in progress is not saved; quitting mid-level restarts it.
+- A pocket fully enclosed by crates stays empty until it is opened. This is intended, but it can leave visible gaps.
+- `companyName` is still `DefaultCompany`. Changing it moves the desktop save path, so it was left as is.
+- Many moves still write `Debug.Log` lines, and these are included in builds.
+
+### Scope decisions
+
+These are intentional exclusions, not bugs:
+
+- no Color Bomb or power-up combinations;
+- no multi-hit obstacles;
+- no level editor beyond the ScriptableObject inspector;
+- no backend, accounts, cloud save or monetisation.
+
+The goal was a small set of core systems done carefully rather than feature breadth.
+
+## Technology and credits
+
+- Unity 6000.6.0f1, C#, URP 2D renderer, Input System, uGUI and TextMeshPro, Unity Test Framework.
+- The block, power-up, crate, UI and VFX artwork and the sound effects were generated with AI tools from the developer's prompts.
+- The font is LiberationSans from the TextMesh Pro essentials, under the SIL Open Font License (`Assets/TextMesh Pro/Fonts/LiberationSans - OFL.txt`).
+- Unity packages are covered by their own Unity licences.
+- Code was written with AI assistance and reviewed and revised by the developer.
+- No licence has been chosen for this repository yet.
+
+More detail on design decisions: [Docs/ARCHITECTURE.md](Docs/ARCHITECTURE.md).

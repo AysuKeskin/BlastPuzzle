@@ -268,6 +268,119 @@ namespace BlastPuzzle.Presentation
             }
         }
 
+        private sealed class SettleRoute
+        {
+            public BlockView View;
+            public readonly List<Vector3> Points = new List<Vector3>();
+            public int Segment;
+            public float SegmentStart;
+            public bool Appear;
+        }
+
+        private readonly Dictionary<Block, SettleRoute> settleRoutes = new Dictionary<Block, SettleRoute>();
+        private readonly List<SettleRoute> settleRoutePool = new List<SettleRoute>();
+        private int[] settleEntries;
+        private int usedSettleRoutes;
+
+        public void BeginSettlePlan()
+        {
+            settleRoutes.Clear();
+            usedSettleRoutes = 0;
+            if (settleEntries == null || settleEntries.Length != board.Columns)
+                settleEntries = new int[board.Columns];
+            System.Array.Clear(settleEntries, 0, settleEntries.Length);
+        }
+
+        private SettleRoute GetSettleRoute(Block block, BlockView view)
+        {
+            if (settleRoutes.TryGetValue(block, out var existing)) return existing;
+            if (usedSettleRoutes == settleRoutePool.Count) settleRoutePool.Add(new SettleRoute());
+            var route = settleRoutePool[usedSettleRoutes++];
+            route.View = view;
+            route.Points.Clear();
+            route.Points.Add(view.transform.localPosition);
+            route.Segment = 0;
+            route.SegmentStart = 0f;
+            route.Appear = false;
+            settleRoutes.Add(block, route);
+            return route;
+        }
+
+        public void PlanSettleMoves(IReadOnlyList<BlockMove> moves)
+        {
+            foreach (var move in moves)
+            {
+                var view = GetViewFor(move.Block);
+                if (view == null) continue;
+                var route = GetSettleRoute(move.Block, view);
+                route.Points.Add(BoardPositionToLocalPosition(move.To));
+                view.SetBoardPosition(move.To);
+                view.name = ViewName(move.To);
+            }
+        }
+
+        public void PlanSettleSpawns(IReadOnlyList<BlockSpawn> spawns)
+        {
+            foreach (var spawn in spawns)
+            {
+                var view = CreateViewFor(spawn.Block, spawn.Position);
+                bool enclosed = HasObstacleAbove(spawn.Position);
+                Vector3 target = BoardPositionToLocalPosition(spawn.Position);
+                // All incoming waves share one queue per column, keeping their order
+                // and spacing while they enter together behind the board mask.
+                var entry = new BoardPosition(board.Rows + settleEntries[spawn.Position.Column], spawn.Position.Column);
+                view.SetLocalPosition(enclosed ? target : BoardPositionToLocalPosition(entry));
+                var route = GetSettleRoute(spawn.Block, view);
+                route.Points.Add(target);
+                route.Appear = enclosed;
+                if (enclosed) view.SetAlpha(0f);
+                else settleEntries[spawn.Position.Column]++;
+            }
+        }
+
+        public IEnumerator AnimateSettlePlan()
+        {
+            float elapsed = 0f;
+            // Shared speed/acceleration preserves spacing. No easing or waiting at
+            // intermediate vertical/diagonal waypoints: only the final cell stops a block.
+            float speed = CellStride / Mathf.Max(.065f, gravityPerCellDuration);
+            const float accelerationTime = .06f;
+            bool moving;
+            do
+            {
+                elapsed += Time.deltaTime;
+                float distance = speed * (elapsed - accelerationTime * (1f - Mathf.Exp(-elapsed / accelerationTime)));
+                moving = false;
+                for (int i = 0; i < usedSettleRoutes; i++)
+                {
+                    var route = settleRoutePool[i];
+                    while (route.Segment < route.Points.Count - 1)
+                    {
+                        float length = Vector3.Distance(route.Points[route.Segment], route.Points[route.Segment + 1]);
+                        float remaining = distance - route.SegmentStart;
+                        if (remaining < length)
+                        {
+                            route.View.SetLocalPosition(Vector3.Lerp(route.Points[route.Segment],
+                                route.Points[route.Segment + 1], remaining / length));
+                            moving = true;
+                            break;
+                        }
+                        route.SegmentStart += length;
+                        route.Segment++;
+                        route.View.SetLocalPosition(route.Points[route.Segment]);
+                    }
+                    if (route.Appear)
+                    {
+                        float alpha = Mathf.Clamp01(elapsed / Mathf.Max(.01f, refillBaseDuration));
+                        route.View.SetAlpha(alpha);
+                        moving |= alpha < 1f;
+                    }
+                }
+                if (moving) yield return null;
+            } while (moving);
+            settleRoutes.Clear();
+        }
+
         // Blocks falling into the cells gravity moved them to.
         public IEnumerator AnimateMoves(IReadOnlyList<BlockMove> moves) =>
             AnimateBlockMoves(moves, gravityBaseDuration, gravityPerCellDuration);
@@ -625,6 +738,13 @@ namespace BlastPuzzle.Presentation
         public void Clear()
         {
             CancelSelectionFeedback();
+            settleRoutes.Clear();
+            foreach (var route in settleRoutePool)
+            {
+                route.View = null;
+                route.Points.Clear();
+            }
+            usedSettleRoutes = 0;
             releaseBuffer.Clear();
             releaseBuffer.AddRange(viewsByBlock.Values);
             viewsByBlock.Clear();

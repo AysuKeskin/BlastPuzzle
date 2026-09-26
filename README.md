@@ -175,20 +175,7 @@ So the spikes are waiting time, not script, GC or rendering work. The capture ha
 
 The GPU time was not reported ("--" in the capture). No memory or thermal measurements have been made on the device.
 
-### Editor comparison: sprite atlas
-
-A seeded, scripted scenario ran the same 40 moves on an 8×8 board with crates, in **Unity Editor Play Mode** with iOS as the build target.
-
-- **No bottleneck was found.** Main-thread time was about 1 ms per frame. The player loop allocated about 100 B of GC per idle frame, all of it in engine and package code (URP, 2D Animation, Input System) and none in project scripts.
-- **Change:** the 21 board-piece sprites (blocks, rockets, bombs, crate) were packed into one sprite atlas. In the same scenario:
-  - idle draw calls went from 28 to 20;
-  - idle batches went from 5 to 1;
-  - idle SetPass calls went from 16 to 12.
-
-  CPU time did not change measurably.
-- **Trade-off:** the 4096×2048 atlas has unused space, so texture memory for these sprites rises from about 2.5 MB to about 3.7 MB (ASTC 6×6 estimate).
-
-The game sets `Application.targetFrameRate = 60` on mobile. The device capture shows that target being held in normal play, apart from the occasional wait spikes described above.
+**Sprite atlas:** packing the 21 board-piece sprites into one atlas cut idle draw calls from 28 to 20 and batches from 5 to 1 in a seeded Editor before/after run, with no measurable CPU change and about 1.2 MB more texture memory.
 
 ## Mobile
 

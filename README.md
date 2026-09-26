@@ -49,83 +49,37 @@ This is a portfolio-scale project, not a shipped product.
 
 ## Architecture
 
-The code is split into three layers, plus authored level configuration:
+The code is split into three layers:
 
-- **Domain:** board rules in plain C#.
-- **Orchestration:** MonoBehaviours that sequence those rules and own the flow of a level.
-- **Presentation:** input, visuals and audio. It forwards taps and mirrors the board state, but never applies game rules itself.
-
-| Layer | Classes | Unity dependency |
-| --- | --- | --- |
-| Domain (`Boards`, `Blocks`, `Obstacles`, `Goals`, `PowerUps`, `Gameplay/*Resolver`) | `Board`, `Cell`, `Block`, `Obstacle`, `ConnectedGroupFinder`, `GroupRemover`, `GravityResolver`, `RefillResolver`, `ObstacleResolver`, `PowerUpRules`, `PowerUpResolver`, `GoalTracker`, `LevelOutcome`, `MoveAvailabilityChecker`, `BoardShuffleResolver` | None: no `UnityEngine` references |
-| Orchestration (`Core`, `Gameplay`, `Persistence`) | `GameFlowController`, `GameBootstrap`, `GameplayController`, `SaveService`, `SceneNavigator` | MonoBehaviours and file I/O |
-| Presentation (`Presentation`, `UI`) | `BoardView`, `BlockView`, `CrateView`, `BoardInputHandler`, `GameplayVFX`, `GameFeedback`, `GameplayHUD`, `MainMenuController`, `SettingsPanel`, `SafeAreaFitter` | Unity rendering, uGUI and TextMeshPro, audio |
-| Configuration (`Levels`) | `LevelDefinition`, `ColorGoalDefinition`, `ObstaclePlacement` | ScriptableObject and serialisation |
+- **Domain:** board rules in plain C#, with no `UnityEngine` references (`Board`, `ConnectedGroupFinder`, `GravityResolver`, `RefillResolver`, `PowerUpResolver`, `GoalTracker`, `BoardShuffleResolver`, …).
+- **Orchestration:** `GameplayController` runs a move against the board and waits for its animations; `GameFlowController` and `GameBootstrap` handle levels, and `SaveService` handles progress.
+- **Presentation:** `BoardView`, pooled `BlockView`s, HUD, VFX and audio. These mirror the board state and never apply game rules.
 
 ```mermaid
-flowchart TD
-    Menu[MainMenuController] -->|load / reset| Save[SaveService]
-    Menu -->|"Play / Continue: loads Gameplay scene"| Flow
-    Save <-->|JSON| Progress[(PlayerProgressData)]
-
-    Flow[GameFlowController] -->|load on start, unlock on win| Save
-    Flow -->|current LevelDefinition| Boot[GameBootstrap]
-    Levels[(LevelDefinition assets)] --> Flow
-    Boot -->|new Board, GoalTracker, System.Random| GC[GameplayController]
-    Boot -->|Build board| BV
-
-    Input[BoardInputHandler] -->|HandleBlockSelected| GC
-    GC -->|mutates via resolvers| Domain["Domain: Board + resolvers + GoalTracker"]
-    GC -->|animate results| BV[BoardView → pooled BlockView / CrateView]
-    GC --> FX[GameplayVFX / GameFeedback]
-    GC -.->|GameplayChanged / StateChanged| HUD[GameplayHUD]
-    GC -.->|StateChanged| Flow
-    HUD -->|Retry / Next / Play Again| Flow
+flowchart LR
+    Level[LevelDefinition] --> Boot[GameBootstrap] --> GC[GameplayController]
+    Input[BoardInputHandler] --> GC
+    GC --> Domain[Board + resolvers]
+    GC --> View[BoardView / HUD / VFX]
+    GC --> Flow[GameFlowController] --> Save[SaveService]
 ```
 
-### Move resolution
+A move runs in this order: validate tap → remove the group (or fire the power-up) → break crates → maybe create a Rocket or Bomb → gravity, diagonal slides, refill → win, lose, or shuffle if no moves remain. Taps during a move are ignored.
 
-```mermaid
-flowchart TD
-    Tap[Tap] --> Guard{State is WaitingForInput?}
-    Guard -- no --> Drop[Ignore tap]
-    Guard -- yes --> Kind{Power-up?}
-    Kind -- yes --> PU["PowerUpResolver: footprint + chain,<br/>breaks crates in the footprint"]
-    Kind -- no --> Group{"Group size ≥ 2?"}
-    Group -- no --> Shake[Invalid-selection shake, no move spent]
-    Group -- yes --> Remove["GroupRemover → ObstacleResolver (adjacent crates)<br/>→ PowerUpRules (maybe create Rocket/Bomb)"]
-    PU --> Goals[Spend move, update GoalTracker]
-    Remove --> Goals
-    Goals --> Anim[Destruction / creation animations]
-    Anim --> Settle["Settle loop: vertical gravity → diagonal slides → top refill,<br/>planned first, then animated as one pass"]
-    Settle --> Outcome{LevelOutcome}
-    Outcome -- all goals done --> Won
-    Outcome -- no moves left --> Lost
-    Outcome -- continue --> Dead{Any valid move?}
-    Dead -- yes --> Wait[WaitingForInput]
-    Dead -- no --> Shuffle{Shuffle succeeded?}
-    Shuffle -- yes --> Wait
-    Shuffle -- no --> Blocked[Blocked: retry offered]
-```
-
-The state leaves `WaitingForInput` before the first animation and returns only after the board has settled. Taps that arrive in between are dropped, not queued, so a move is never judged against a board that is still changing.
-
-### Config, runtime and save state
-
-| Kind | Where | Lifetime |
+| State | Where | Lifetime |
 | --- | --- | --- |
-| Authored configuration | `LevelDefinition` asset: size, move limit, colours, colour goals, crate placements and crate goal | Shared and never modified at runtime |
-| Attempt state | `Board`, `GoalTracker`, `MovesRemaining`, `GameplayState` | Built fresh by `GameBootstrap` for every attempt and discarded on retry or next level |
-| Player progression | `PlayerProgressData` in `player-progress.json` under `Application.persistentDataPath`: save version, highest unlocked level, sound and vibration flags | Persists between sessions; an in-progress board is not saved |
+| Level config | `LevelDefinition` asset | Shared, read-only |
+| Attempt | `Board`, `GoalTracker`, moves left | Rebuilt for every attempt |
+| Progress | `PlayerProgressData` (JSON) | Saved between sessions |
 
-### Key decisions
+Key decisions:
 
-- **Row 0 is the bottom row.** Gravity moves blocks toward lower row indices, and rows map directly to Unity's +Y axis, so there is no flipping between logic and screen coordinates.
-- **`Board` is the single source of truth.** Views only mirror the board. A `BlockView` is bound to a logical `Block` and can be recycled without affecting game state.
-- **Logical `Block`s are not pooled; `BlockView`s are.** `Block` is a small C# object whose identity matters to goals, moves and tests. Reusing blocks would mix up identity. `BlockView` is a GameObject that is expensive to instantiate, so `BoardView` keeps it in an `ObjectPool<BlockView>` sized to the board and resets its visual state on release. Crates are few and are not pooled.
-- **One injected `System.Random` per session.** `GameBootstrap` creates one `System.Random` and passes it to refill and shuffle. Tests pass a seeded instance, so layouts are reproducible. A quick retry never reuses a clock-seeded board.
-- **Deterministic resolution order.** Gravity, diagonal slides (with a fixed tie-break) and refill run in a fixed order. The whole settle route is planned on the board first, then animated in one pass.
-- **Save data stores progression, not boards.** This keeps the schema small and versioned. The save is written to a temporary file and then swapped in; failed writes stay pending and are retried.
+- Row 0 is the bottom row, matching Unity's +Y axis.
+- `BlockView`s are pooled; logical `Block`s are not, because goals and tests depend on their identity.
+- One seeded `System.Random` is passed into refill and shuffle, so tests are reproducible.
+- The save stores progress only, never the board.
+
+More detail: [Docs/ARCHITECTURE.md](Docs/ARCHITECTURE.md).
 
 ## Testing
 

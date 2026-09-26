@@ -9,6 +9,10 @@ namespace BlastPuzzle.Persistence
         public int SaveVersion;
         public int HighestUnlockedLevelIndex;
 
+        // The level Continue starts. Saves written before this field existed resume
+        // from the highest unlocked level instead.
+        public int CurrentLevelIndex;
+
         // Settings live here so they survive the trip between the menu and gameplay.
         // Defaults are on, and an older save simply leaves them at those values.
         public bool SoundEnabled = true;

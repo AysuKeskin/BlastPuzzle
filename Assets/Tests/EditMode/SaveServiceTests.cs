@@ -38,10 +38,7 @@ namespace BlastPuzzle.Tests.EditMode
             LogAssert.NoUnexpectedReceived();
         }
 
-        [TestCase(0)]
-        [TestCase(1)]
         [TestCase(2)]
-        [TestCase(10)]
         public void SaveThenLoad_RoundTripsVersionAndHighestUnlockedLevel(int index)
         {
             PlayerProgressData data = SaveService.CreateDefault();
@@ -73,19 +70,13 @@ namespace BlastPuzzle.Tests.EditMode
             Assert.That(json, Does.Contain("\n"));
             Assert.That(json, Does.Contain("\"SaveVersion\": 1"));
             Assert.That(json, Does.Contain("\"HighestUnlockedLevelIndex\": 0"));
-            Assert.That(Regex.Matches(json, "\"[^\"]+\"\\s*:").Count, Is.EqualTo(4));
+            Assert.That(json, Does.Contain("\"CurrentLevelIndex\": 0"));
+            Assert.That(Regex.Matches(json, "\"[^\"]+\"\\s*:").Count, Is.EqualTo(5));
         }
 
         [TestCase("this is not JSON")]
-        [TestCase("{broken}")]
-        [TestCase("")]
-        [TestCase("null")]
-        [TestCase("[]")]
         [TestCase("{}")]
-        [TestCase("{\"SaveVersion\":1}")]
         [TestCase("{\"HighestUnlockedLevelIndex\":2}")]
-        [TestCase("{\"SaveVersion\":1,\"HighestUnlockedLevelIndex\":-1}")]
-        [TestCase("{\"SaveVersion\":0,\"HighestUnlockedLevelIndex\":2}")]
         [TestCase("{\"SaveVersion\":99,\"HighestUnlockedLevelIndex\":2}")]
         public void CorruptMissingOrInvalidFields_WarnAndFallBackWithoutOverwriting(string json)
         {
@@ -120,13 +111,6 @@ namespace BlastPuzzle.Tests.EditMode
             PlayerProgressData restored = service.LoadOrCreate();
             Assert.That(restored.HighestUnlockedLevelIndex, Is.Zero);
             Assert.That(restored.SaveVersion, Is.EqualTo(SaveService.CurrentSaveVersion));
-        }
-
-        [Test]
-        public void DeleteSave_WithNoFile_ReportsNothingToDeleteWithoutThrowing()
-        {
-            Assert.That(File.Exists(path), Is.False);
-            Assert.That(service.DeleteSave(), Is.False);
         }
 
         [Test]

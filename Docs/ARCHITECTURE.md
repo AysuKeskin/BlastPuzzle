@@ -52,7 +52,7 @@ Each step returns `BlockMove` or `BlockSpawn` records. `BoardView` collects them
 | Runtime | `Board`, `GoalTracker`, `MovesRemaining`, `GameplayState` | `GameplayController` | One attempt |
 | Save | `PlayerProgressData` | `SaveService` | Across sessions |
 
-The save stores only the highest unlocked level, the save version and two preference flags. Board state is never saved, which keeps the schema small and easy to validate and version.
+The save stores only the save version, the highest unlocked level, the level Continue resumes (which wraps to level 1 after the final level is beaten), and two preference flags. Board state is never saved, which keeps the schema small and easy to validate and version.
 
 ## How do Crates change gravity?
 
@@ -69,7 +69,7 @@ A group blast breaks crates orthogonally adjacent to any removed cell (`Obstacle
 They are `Block`s with a different `BlockKind`:
 
 - **Not part of colour groups.** The group search skips them.
-- **Tapping fires them.** `PowerUpResolver` computes a footprint (the whole row, the whole column, or a plus shape for the Bomb) and clears it.
+- **Tapping fires them.** `PowerUpResolver` computes a footprint (the whole row, the whole column, or the 3×3 square around the Bomb) and clears it.
 - **Chain reactions.** Any power-up inside the footprint is queued and fires in turn. A `fired` set ensures each power-up fires once, so two rockets cannot trigger each other forever.
 
 `PowerUpRules` decides creation:

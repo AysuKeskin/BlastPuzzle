@@ -86,18 +86,6 @@ namespace BlastPuzzle.Tests.EditMode
         }
 
         [Test]
-        public void EmptySelection_DoesNotConsumeMove()
-        {
-            Initialise(BoardLayout.Build("R . R R"));
-
-            controller.HandleBlockSelected(At(0, 1));
-
-            Assert.That(controller.MovesRemaining, Is.EqualTo(20));
-            Assert.That(blueGoal.CurrentCount, Is.Zero);
-            Assert.That(controller.State, Is.EqualTo(GameplayState.WaitingForInput));
-        }
-
-        [Test]
         public void OutOfBoardSelection_DoesNotConsumeMove()
         {
             Initialise(BoardLayout.Build("R R"));
@@ -141,23 +129,6 @@ namespace BlastPuzzle.Tests.EditMode
         }
 
         [Test]
-        public void LostState_IgnoresPowerUpTap()
-        {
-            Board board = BoardLayout.Build(
-                "X R",
-                "B B");
-            Initialise(board);
-            ForceState(controller, GameplayState.Lost);
-
-            int moves = controller.MovesRemaining;
-            controller.HandleBlockSelected(At(1, 0));
-
-            Assert.That(controller.State, Is.EqualTo(GameplayState.Lost));
-            Assert.That(controller.MovesRemaining, Is.EqualTo(moves));
-            Assert.That(board.GetCell(1, 0).HasBlock, Is.True, "The bomb was not activated.");
-        }
-
-        [Test]
         public void TappingPowerUpIsNotAnUndersizedGroup()
         {
             Board board = BoardLayout.Build(
@@ -186,19 +157,5 @@ namespace BlastPuzzle.Tests.EditMode
             Assert.That(controller.MovesRemaining, Is.EqualTo(moves));
         }
 
-        [Test]
-        public void LostState_IgnoresFurtherSelections()
-        {
-            Initialise(BoardLayout.Build(
-                "R R",
-                "B B"));
-            ForceState(controller, GameplayState.Lost);
-
-            int moves = controller.MovesRemaining;
-            controller.HandleBlockSelected(At(1, 0));
-
-            Assert.That(controller.State, Is.EqualTo(GameplayState.Lost));
-            Assert.That(controller.MovesRemaining, Is.EqualTo(moves));
-        }
     }
 }

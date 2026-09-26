@@ -58,6 +58,8 @@ namespace BlastPuzzle.UI
 
         public int HighestUnlockedLevelIndex => progress?.HighestUnlockedLevelIndex ?? 0;
 
+        public int CurrentLevelIndex => progress?.CurrentLevelIndex ?? 0;
+
         private void Start()
         {
             // Gameplay advances progress; the menu can change settings or reset it.
@@ -81,14 +83,14 @@ namespace BlastPuzzle.UI
 
         private void Refresh()
         {
-            bool started = HighestUnlockedLevelIndex > 0;
+            bool started = HighestUnlockedLevelIndex > 0 || CurrentLevelIndex > 0;
 
             playLabel.text = started ? continueText : playText;
 
             if (progressLabel != null)
             {
-                progressLabel.gameObject.SetActive(started);
-                progressLabel.text = $"Level {HighestUnlockedLevelIndex + 1}";
+                progressLabel.gameObject.SetActive(true);
+                progressLabel.text = $"Level {CurrentLevelIndex + 1}";
             }
 
             if (settingsPanel != null)
@@ -140,6 +142,7 @@ namespace BlastPuzzle.UI
             }
 
             progress.HighestUnlockedLevelIndex = 0;
+            progress.CurrentLevelIndex = 0;
             resetArmed = false;
             Save();
         }

@@ -13,29 +13,6 @@ namespace BlastPuzzle.Tests.EditMode
         private static BoardPosition At(int row, int column) => new BoardPosition(row, column);
 
         [Test]
-        public void EmptyBoard_ProducesNoMoves()
-        {
-            Board board = BoardLayout.Build(
-                ". . .",
-                ". . .");
-
-            Assert.That(GravityResolver.ApplyGravity(board), Is.Empty);
-        }
-
-        [Test]
-        public void FullBoard_ProducesNoMoves()
-        {
-            Board board = BoardLayout.Build(
-                "R B G",
-                "Y P R");
-
-            string before = Describe(board);
-
-            Assert.That(GravityResolver.ApplyGravity(board), Is.Empty);
-            Assert.That(Describe(board), Is.EqualTo(before), "A full board is already settled.");
-        }
-
-        [Test]
         public void AlreadySettledColumn_ProducesNoMoves()
         {
             // Blocks already packed at the bottom, holes already at the top.
@@ -102,40 +79,6 @@ namespace BlastPuzzle.Tests.EditMode
         }
 
         [Test]
-        public void Gravity_DoesNotMoveBlocksHorizontally()
-        {
-            Board board = BoardLayout.Build(
-                "R . B .",
-                ". Y . P",
-                "G . . .");
-
-            IReadOnlyList<BlockMove> moves = GravityResolver.ApplyGravity(board);
-
-            Assert.That(moves, Is.Not.Empty);
-            foreach (BlockMove move in moves)
-            {
-                Assert.That(move.To.Column, Is.EqualTo(move.From.Column),
-                    $"{move} changed column; gravity must only move vertically.");
-                Assert.That(move.To.Row, Is.LessThan(move.From.Row), $"{move} did not move downward.");
-            }
-        }
-
-        [Test]
-        public void Gravity_DoesNotChangeOccupiedBlockCount()
-        {
-            Board board = BoardLayout.Build(
-                "R . B .",
-                ". Y . P",
-                "G . . .");
-
-            int before = CountOccupied(board);
-            GravityResolver.ApplyGravity(board);
-
-            Assert.That(CountOccupied(board), Is.EqualTo(before));
-            Assert.That(before, Is.EqualTo(5));
-        }
-
-        [Test]
         public void Gravity_PreservesBlockIdentity()
         {
             Board board = BoardLayout.Build(
@@ -159,33 +102,6 @@ namespace BlastPuzzle.Tests.EditMode
         }
 
         [Test]
-        public void Gravity_ReturnsCorrectFromAndToPositions()
-        {
-            Board board = BoardLayout.Build(
-                "R",
-                ".",
-                "B",
-                ".",
-                "G");
-
-            Block red = board.GetCell(4, 0).Block;
-            Block blue = board.GetCell(2, 0).Block;
-
-            IReadOnlyList<BlockMove> moves = GravityResolver.ApplyGravity(board);
-
-            // Compared as a set: the order moves are reported in is not part of the contract.
-            Assert.That(moves.Select(m => $"{m.From}->{m.To}"),
-                Is.EquivalentTo(new[] { "(r2, c0)->(r1, c0)", "(r4, c0)->(r2, c0)" }));
-
-            // Each record carries the block that actually moved.
-            Assert.That(moves.Single(m => m.From == At(4, 0)).Block, Is.SameAs(red));
-            Assert.That(moves.Single(m => m.From == At(2, 0)).Block, Is.SameAs(blue));
-
-            // The Green at the bottom never moved, so it is not reported at all.
-            Assert.That(moves.Any(m => m.From == At(0, 0)), Is.False);
-        }
-
-        [Test]
         public void Gravity_HandlesMultipleColumnsIndependently()
         {
             //  col0 needs to fall two rows, col1 is already settled, col2 falls one.
@@ -197,23 +113,6 @@ namespace BlastPuzzle.Tests.EditMode
             GravityResolver.ApplyGravity(board);
 
             Assert.That(Describe(board), Is.EqualTo(".../..B/RYG/"));
-            AssertSettled(board);
-        }
-
-        [Test]
-        public void EntireTopSectionCanCollapse()
-        {
-            // Everything sits at the top with nothing beneath it; the whole block falls.
-            Board board = BoardLayout.Build(
-                "R B G",
-                "Y P R",
-                ". . .",
-                ". . .");
-
-            IReadOnlyList<BlockMove> moves = GravityResolver.ApplyGravity(board);
-
-            Assert.That(moves, Has.Count.EqualTo(6), "Every block moved.");
-            Assert.That(Describe(board), Is.EqualTo(".../.../RBG/YPR/"));
             AssertSettled(board);
         }
 

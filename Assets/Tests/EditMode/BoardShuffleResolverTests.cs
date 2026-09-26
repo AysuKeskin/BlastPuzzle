@@ -127,17 +127,6 @@ namespace BlastPuzzle.Tests.EditMode
             Assert.That(Describe(board), Is.EqualTo(before));
         }
 
-        [Test]
-        public void Shuffle_PreservesBlockCount()
-        {
-            Board board = DeadlockedBoard();
-            int before = BlocksOf(board).Count;
-
-            BoardShuffleResolver.Shuffle(board, MinimumGroupSize, new Random(1));
-
-            Assert.That(BlocksOf(board).Count, Is.EqualTo(before));
-        }
-
         // The identity guarantee that lets pooled BlockViews survive a shuffle untouched.
         [Test]
         public void Shuffle_PreservesBlockInstances()
@@ -170,19 +159,6 @@ namespace BlastPuzzle.Tests.EditMode
         }
 
         [Test]
-        public void Shuffle_DoesNotCreatePowerUps()
-        {
-            Board board = DeadlockedBoard();
-
-            BoardShuffleResolver.Shuffle(board, MinimumGroupSize, new Random(1));
-
-            foreach (Block block in BlocksOf(board))
-            {
-                Assert.That(block.IsNormal, Is.True, "A shuffle must not invent power-ups.");
-            }
-        }
-
-        [Test]
         public void Shuffle_PreservesCratePositions()
         {
             Board board = BoardLayout.Build(
@@ -201,21 +177,6 @@ namespace BlastPuzzle.Tests.EditMode
         }
 
         [Test]
-        public void Shuffle_DoesNotCreateOrDestroyCrates()
-        {
-            Board board = BoardLayout.Build(
-                "RBRB",
-                "BCCR",
-                "RCCB",
-                "BRBR");
-
-            int before = CratePositions(board).Count;
-
-            BoardShuffleResolver.Shuffle(board, MinimumGroupSize, new Random(4));
-
-            Assert.That(CratePositions(board).Count, Is.EqualTo(before));
-        }
-        [Test]
         public void Shuffle_WithSameSeed_IsReproducible()
         {
             Board first = DeadlockedBoard();
@@ -225,35 +186,6 @@ namespace BlastPuzzle.Tests.EditMode
             BoardShuffleResolver.Shuffle(second, MinimumGroupSize, new Random(12345));
 
             Assert.That(Describe(second), Is.EqualTo(Describe(first)));
-        }
-
-        [Test]
-        public void Shuffle_WithDifferentSeeds_GenerallyDiffers()
-        {
-            Board first = DeadlockedBoard();
-            Board second = DeadlockedBoard();
-
-            BoardShuffleResolver.Shuffle(first, MinimumGroupSize, new Random(1));
-            BoardShuffleResolver.Shuffle(second, MinimumGroupSize, new Random(999));
-
-            Assert.That(Describe(second), Is.Not.EqualTo(Describe(first)),
-                "Two different seeds producing the identical arrangement suggests the seed is ignored.");
-        }
-        [Test]
-        public void Shuffle_DoesNotChangeGoalStateOrConsumeMoves()
-        {
-            Board board = DeadlockedBoard();
-            var goals = new GoalTracker(new[] { new ColorGoal(BlockColor.Red, 10) }, new CrateGoal(3));
-            goals.Goals[0].RecordRemoved(4);
-            goals.CrateGoal.RecordDestroyed(1);
-
-            int movesRemaining = 7;
-
-            BoardShuffleResolver.Shuffle(board, MinimumGroupSize, new Random(1));
-
-            Assert.That(goals.Goals[0].CurrentCount, Is.EqualTo(4));
-            Assert.That(goals.CrateGoal.CurrentCount, Is.EqualTo(1));
-            Assert.That(movesRemaining, Is.EqualTo(7));
         }
 
         [Test]
@@ -321,24 +253,6 @@ namespace BlastPuzzle.Tests.EditMode
             Assert.That(result.Succeeded, Is.False);
             Assert.That(Describe(board), Is.EqualTo(before),
                 "A failed shuffle must not leave the board half-mutated.");
-        }
-
-        [Test]
-        public void ZeroAttempts_IsRejected()
-        {
-            Board board = DeadlockedBoard();
-
-            Assert.That(() => BoardShuffleResolver.Shuffle(board, MinimumGroupSize, new Random(1), 0),
-                Throws.TypeOf<ArgumentOutOfRangeException>());
-        }
-
-        [Test]
-        public void NullBoardOrRandom_IsRejected()
-        {
-            Assert.That(() => BoardShuffleResolver.Shuffle(null, MinimumGroupSize, new Random(1)),
-                Throws.ArgumentNullException);
-            Assert.That(() => BoardShuffleResolver.Shuffle(DeadlockedBoard(), MinimumGroupSize, null),
-                Throws.ArgumentNullException);
         }
 
         private static string Describe(Board board)

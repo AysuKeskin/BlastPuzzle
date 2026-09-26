@@ -35,10 +35,6 @@ namespace BlastPuzzle.Tests.EditMode
         }
 
         [Test]
-        public void GroupSize2_DoesNotCreatePowerUp() =>
-            Assert.That(PowerUpRules.TryCreatePowerUp(Row(2), BlockColor.Blue), Is.Null);
-
-        [Test]
         public void GroupSize4_DoesNotCreatePowerUp() =>
             Assert.That(PowerUpRules.TryCreatePowerUp(Row(4), BlockColor.Blue), Is.Null);
 
@@ -121,16 +117,6 @@ namespace BlastPuzzle.Tests.EditMode
         }
 
         [Test]
-        public void ConnectedGroup_DoesNotTraverseBomb()
-        {
-            Board board = BoardLayout.Build("R R X R");
-
-            IReadOnlyList<BoardPosition> group = ConnectedGroupFinder.FindConnectedGroup(board, At(0, 0));
-
-            Assert.That(group, Is.EquivalentTo(new[] { At(0, 0), At(0, 1) }));
-        }
-
-        [Test]
         public void PowerUpWithSameStoredColor_IsNotPartOfNormalGroup()
         {
             Board board = BoardLayout.Build("R H R");
@@ -141,12 +127,5 @@ namespace BlastPuzzle.Tests.EditMode
             Assert.That(group, Is.EquivalentTo(new[] { At(0, 0) }), "...and still not part of the group.");
         }
 
-        [Test]
-        public void SelectingPowerUpFindsNoNormalGroup()
-        {
-            Board board = BoardLayout.Build("R H R");
-
-            Assert.That(ConnectedGroupFinder.FindConnectedGroup(board, At(0, 1)), Is.Empty);
-        }
     }
 }

@@ -101,11 +101,16 @@ namespace BlastPuzzle.PowerUps
                     break;
 
                 case BlockKind.Bomb:
-                    cells.Add(position);
-
-                    foreach (Cell neighbour in board.GetOrthogonalNeighbours(position))
+                    // The 3x3 square around the bomb, diagonals included, clipped to the board.
+                    for (int row = position.Row - 1; row <= position.Row + 1; row++)
                     {
-                        cells.Add(neighbour.Position);
+                        for (int column = position.Column - 1; column <= position.Column + 1; column++)
+                        {
+                            if (board.IsInside(row, column))
+                            {
+                                cells.Add(new BoardPosition(row, column));
+                            }
+                        }
                     }
 
                     break;

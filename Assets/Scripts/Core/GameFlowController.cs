@@ -100,11 +100,13 @@ namespace BlastPuzzle.Core
                 SaveVersion = loadedProgress.SaveVersion,
                 HighestUnlockedLevelIndex = Math.Min(loadedProgress.HighestUnlockedLevelIndex, LevelCount - 1)
             };
+            progress.CurrentLevelIndex = Math.Min(loadedProgress.CurrentLevelIndex, progress.HighestUnlockedLevelIndex);
             progress.SoundEnabled = loadedProgress.SoundEnabled;
             progress.HapticsEnabled = loadedProgress.HapticsEnabled;
-            CurrentLevelIndex = progress.HighestUnlockedLevelIndex;
+            CurrentLevelIndex = progress.CurrentLevelIndex;
             ApplySettings();
-            if (progress.HighestUnlockedLevelIndex != loadedProgress.HighestUnlockedLevelIndex)
+            if (progress.HighestUnlockedLevelIndex != loadedProgress.HighestUnlockedLevelIndex ||
+                progress.CurrentLevelIndex != loadedProgress.CurrentLevelIndex)
             {
                 progressDirty = true;
                 FlushProgress();
@@ -139,7 +141,21 @@ namespace BlastPuzzle.Core
                 progress.HighestUnlockedLevelIndex = unlocked;
                 progressDirty = true;
             }
+
+            // Continue resumes after the level just won; finishing the last one starts over.
+            RememberCurrentLevel(HasNextLevel ? CurrentLevelIndex + 1 : 0);
             FlushProgress();
+        }
+
+        private void RememberCurrentLevel(int index)
+        {
+            if (progress == null || progress.CurrentLevelIndex == index)
+            {
+                return;
+            }
+
+            progress.CurrentLevelIndex = index;
+            progressDirty = true;
         }
 
         public bool SoundEnabled => progress?.SoundEnabled ?? true;
@@ -225,6 +241,7 @@ namespace BlastPuzzle.Core
                 return;
             }
 
+            RememberCurrentLevel(CurrentLevelIndex);
             FlushProgress();
             bootstrap.StartLevel(CurrentLevel);
         }

@@ -26,6 +26,7 @@ namespace BlastPuzzle.Persistence
         {
             SaveVersion = CurrentSaveVersion,
             HighestUnlockedLevelIndex = 0,
+            CurrentLevelIndex = 0,
             SoundEnabled = true,
             HapticsEnabled = true
         };
@@ -57,7 +58,8 @@ namespace BlastPuzzle.Persistence
                 // an absent field would otherwise look like a valid index 0.
                 // Only the two ints get sentinels; the bools keep their defaults so an
                 // older save without them stays fully enabled.
-                var loaded = new PlayerProgressData { SaveVersion = -1, HighestUnlockedLevelIndex = -1 };
+                var loaded = new PlayerProgressData
+                    { SaveVersion = -1, HighestUnlockedLevelIndex = -1, CurrentLevelIndex = -1 };
                 string trimmed = json.Trim();
                 if (!trimmed.StartsWith("{") || !trimmed.EndsWith("}"))
                 {
@@ -65,6 +67,13 @@ namespace BlastPuzzle.Persistence
                 }
 
                 JsonUtility.FromJsonOverwrite(json, loaded);
+                if (loaded.HighestUnlockedLevelIndex >= 0)
+                {
+                    // Missing in older saves; never ahead of what has been unlocked.
+                    loaded.CurrentLevelIndex = loaded.CurrentLevelIndex < 0
+                        ? loaded.HighestUnlockedLevelIndex
+                        : Math.Min(loaded.CurrentLevelIndex, loaded.HighestUnlockedLevelIndex);
+                }
                 Validate(loaded);
                 return loaded;
             }
@@ -88,6 +97,10 @@ namespace BlastPuzzle.Persistence
             if (data.HighestUnlockedLevelIndex < 0)
             {
                 throw new ArgumentException("Highest unlocked level index cannot be negative or missing.");
+            }
+            if (data.CurrentLevelIndex < 0 || data.CurrentLevelIndex > data.HighestUnlockedLevelIndex)
+            {
+                throw new ArgumentException("Current level index must be between 0 and the highest unlocked level.");
             }
         }
         public bool DeleteSave()

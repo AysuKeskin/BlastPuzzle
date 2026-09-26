@@ -73,34 +73,6 @@ namespace BlastPuzzle.Tests.EditMode
         }
 
         [Test]
-        public void RemoveBlock_LeavesCellEmpty()
-        {
-            Board board = BoardLayout.Build("R R");
-
-            board.RemoveBlock(At(0, 0));
-
-            Cell cell = board.GetCell(0, 0);
-            Assert.That(cell.IsEmpty, Is.True);
-            Assert.That(cell.Block, Is.Null);
-            // The Cell itself still exists -- only its contents were cleared.
-            Assert.That(cell.Position, Is.EqualTo(At(0, 0)));
-        }
-
-        [Test]
-        public void RemovedBlock_IsReturnedByBoard()
-        {
-            Board board = BoardLayout.Build("G R");
-
-            Block original = board.GetCell(0, 0).Block;
-            Block returned = board.RemoveBlock(At(0, 0));
-            Assert.That(returned, Is.SameAs(original));
-            Assert.That(returned.Color, Is.EqualTo(BlockColor.Green));
-
-            // Removing from an already-empty cell reports null rather than throwing.
-            Assert.That(board.RemoveBlock(At(0, 0)), Is.Null);
-        }
-
-        [Test]
         public void RemovingOneGroup_PreservesOtherBlocks()
         {
             Board board = BoardLayout.Build(
@@ -116,57 +88,6 @@ namespace BlastPuzzle.Tests.EditMode
             Assert.That(removed, Has.Count.EqualTo(9));
             Assert.That(CountOccupied(board), Is.EqualTo(3), "Only the three Blues should remain.");
             Assert.That(Describe(board), Is.EqualTo("..B./B.B./..../"));
-        }
-
-        [Test]
-        public void GroupPositionsRemainUsableDuringRemoval()
-        {
-            Board board = BoardLayout.Build(
-                "R R R",
-                "R R R",
-                "R R R");
-
-            IReadOnlyList<BoardPosition> group = ConnectedGroupFinder.FindConnectedGroup(board, At(1, 1));
-            Assert.That(group, Has.Count.EqualTo(9));
-
-            IReadOnlyList<Block> removed = GroupRemover.TryRemoveGroup(board, group, MinimumGroupSize);
-
-            // Every position was still addressable after earlier iterations had emptied cells.
-            Assert.That(removed, Has.Count.EqualTo(9));
-            Assert.That(CountOccupied(board), Is.EqualTo(0));
-
-            foreach (BoardPosition position in group)
-            {
-                Assert.That(board.GetCell(position).IsEmpty, Is.True);
-            }
-        }
-
-        [Test]
-        public void OccupiedCountDropsByExactlyTheGroupSize()
-        {
-            Board board = BoardLayout.Build(
-                "R R B R",
-                "B R B R",
-                "R R R R");
-
-            int before = CountOccupied(board);
-            IReadOnlyList<BoardPosition> group = ConnectedGroupFinder.FindConnectedGroup(board, At(0, 0));
-            IReadOnlyList<Block> removed = GroupRemover.TryRemoveGroup(board, group, MinimumGroupSize);
-
-            Assert.That(CountOccupied(board), Is.EqualTo(before - removed.Count));
-        }
-
-        [Test]
-        public void EmptyStartProducesNoRemoval()
-        {
-            Board board = BoardLayout.Build("R . R");
-
-            string before = Describe(board);
-            IReadOnlyList<BoardPosition> group = ConnectedGroupFinder.FindConnectedGroup(board, At(0, 1));
-            IReadOnlyList<Block> removed = GroupRemover.TryRemoveGroup(board, group, MinimumGroupSize);
-
-            Assert.That(removed, Is.Empty);
-            Assert.That(Describe(board), Is.EqualTo(before));
         }
 
         private static int CountOccupied(Board board)

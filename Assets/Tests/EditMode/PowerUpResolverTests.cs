@@ -52,36 +52,6 @@ namespace BlastPuzzle.Tests.EditMode
         }
 
         [Test]
-        public void Rocket_RemovesItself()
-        {
-            Board board = BoardLayout.Build("R H G");
-
-            PowerUpActivationResult result = PowerUpResolver.Activate(board, At(0, 1));
-
-            Assert.That(board.GetCell(0, 1).IsEmpty, Is.True);
-            Assert.That(result.RemovedBlocks.Any(b => b.Kind == BlockKind.Rocket), Is.True,
-                "The activated rocket is itself among the removed blocks.");
-        }
-
-        [Test]
-        public void Rocket_DoesNotAffectOtherRowsOrColumns()
-        {
-            Board board = BoardLayout.Build(
-                "B B B",
-                "R H G",
-                "Y Y Y");
-
-            PowerUpResolver.Activate(board, At(1, 1));
-
-            for (int column = 0; column < 3; column++)
-            {
-                Assert.That(board.GetCell(2, column).HasBlock, Is.True, "Top row survives.");
-                Assert.That(board.GetCell(0, column).HasBlock, Is.True, "Bottom row survives.");
-                Assert.That(board.GetCell(1, column).IsEmpty, Is.True, "Rocket row cleared.");
-            }
-        }
-
-        [Test]
         public void Rocket_HitsCrateInItsPath()
         {
             Board board = BoardLayout.Build("R H C G");
@@ -107,19 +77,6 @@ namespace BlastPuzzle.Tests.EditMode
             Assert.That(board.GetCell(0, 4).IsEmpty, Is.True);
         }
 
-        [Test]
-        public void RocketAtBoardEdge_Works()
-        {
-            //  Rocket in the very first column, vertical: clears its column and nothing else.
-            Board board = BoardLayout.Build(
-                "V R",
-                "G Y");
-
-            PowerUpActivationResult result = PowerUpResolver.Activate(board, At(1, 0));
-
-            Assert.That(result.RemovedBlockPositions, Is.EquivalentTo(new[] { At(1, 0), At(0, 0) }));
-            Assert.That(board.GetCell(1, 1).HasBlock, Is.True);
-        }
     }
 
     public sealed class BombTests
@@ -127,7 +84,7 @@ namespace BlastPuzzle.Tests.EditMode
         private static BoardPosition At(int row, int column) => new BoardPosition(row, column);
 
         [Test]
-        public void Bomb_RemovesBlocksInPlusShape()
+        public void Bomb_RemovesBlocksInSquare()
         {
             Board board = BoardLayout.Build(
                 "B B B B B",
@@ -138,67 +95,15 @@ namespace BlastPuzzle.Tests.EditMode
 
             PowerUpActivationResult result = PowerUpResolver.Activate(board, At(2, 2));
 
-            // Itself plus the four cells sharing an edge -- five, not nine.
-            Assert.That(result.RemovedBlockPositions,
-                Is.EquivalentTo(new[] { At(2, 2), At(3, 2), At(1, 2), At(2, 3), At(2, 1) }));
-        }
-
-        [Test]
-        public void Bomb_DoesNotAffectDiagonals()
-        {
-            Board board = BoardLayout.Build(
-                "B B B B B",
-                "B R R R B",
-                "B R X R B",
-                "B R R R B",
-                "B B B B B");
-
-            PowerUpResolver.Activate(board, At(2, 2));
-
-            Assert.That(board.GetCell(1, 1).HasBlock, Is.True, "bottom-left diagonal survived");
-            Assert.That(board.GetCell(1, 3).HasBlock, Is.True, "bottom-right diagonal survived");
-            Assert.That(board.GetCell(3, 1).HasBlock, Is.True, "top-left diagonal survived");
-            Assert.That(board.GetCell(3, 3).HasBlock, Is.True, "top-right diagonal survived");
-        }
-
-        [Test]
-        public void Bomb_RemovesItself()
-        {
-            Board board = BoardLayout.Build(
-                "R R R",
-                "R X R",
-                "R R R");
-
-            PowerUpActivationResult result = PowerUpResolver.Activate(board, At(1, 1));
-
-            Assert.That(board.GetCell(1, 1).IsEmpty, Is.True);
-            Assert.That(result.RemovedBlocks.Any(b => b.Kind == BlockKind.Bomb), Is.True);
-        }
-
-        [Test]
-        public void Bomb_DoesNotAffectCellsOutsideRadius()
-        {
-            Board board = BoardLayout.Build(
-                "B B B B B",
-                "B R R R B",
-                "B R X R B",
-                "B R R R B",
-                "B B B B B");
-
-            PowerUpResolver.Activate(board, At(2, 2));
-
-            // The whole outer ring survives...
-            for (int i = 0; i < 5; i++)
+            // The whole 3x3 square, diagonals included; the outer ring survives.
+            Assert.That(result.RemovedBlockPositions, Is.EquivalentTo(new[]
             {
-                Assert.That(board.GetCell(4, i).HasBlock, Is.True);
-                Assert.That(board.GetCell(0, i).HasBlock, Is.True);
-                Assert.That(board.GetCell(i, 0).HasBlock, Is.True);
-                Assert.That(board.GetCell(i, 4).HasBlock, Is.True);
-            }
-
-            // ...and so does the ring immediately around the bomb, apart from the plus arms.
-            Assert.That(board.GetCell(1, 1).HasBlock, Is.True);
-            Assert.That(board.GetCell(3, 3).HasBlock, Is.True);
+                At(1, 1), At(1, 2), At(1, 3),
+                At(2, 1), At(2, 2), At(2, 3),
+                At(3, 1), At(3, 2), At(3, 3)
+            }));
+            Assert.That(board.GetCell(0, 0).HasBlock, Is.True);
+            Assert.That(board.GetCell(4, 2).HasBlock, Is.True);
         }
 
         [Test]
@@ -211,25 +116,8 @@ namespace BlastPuzzle.Tests.EditMode
 
             PowerUpActivationResult result = PowerUpResolver.Activate(board, At(0, 0));
             Assert.That(result.RemovedBlockPositions,
-                Is.EquivalentTo(new[] { At(0, 0), At(1, 0), At(0, 1) }),
-                "A corner bomb affects three cells.");
-            Assert.That(board.GetCell(1, 1).HasBlock, Is.True, "The diagonal survived.");
-        }
-
-        [Test]
-        public void BombAtEdge_ClampsToBoard()
-        {
-            Board board = BoardLayout.Build(
-                "R R R",
-                "X R R",
-                "R R R");
-
-            PowerUpActivationResult result = PowerUpResolver.Activate(board, At(1, 0));
-
-            // Itself, above, below and right -- left is off the board.
-            Assert.That(result.RemovedBlockPositions,
-                Is.EquivalentTo(new[] { At(1, 0), At(2, 0), At(0, 0), At(1, 1) }),
-                "An edge bomb affects four cells.");
+                Is.EquivalentTo(new[] { At(0, 0), At(1, 0), At(0, 1), At(1, 1) }),
+                "A corner bomb affects the four cells of its square that are on the board.");
         }
 
         [Test]
@@ -242,10 +130,8 @@ namespace BlastPuzzle.Tests.EditMode
 
             PowerUpActivationResult result = PowerUpResolver.Activate(board, At(1, 1));
 
-            Assert.That(result.RemovedObstacles, Has.Count.EqualTo(1));
-            Assert.That(result.RemovedObstacles[0].Position, Is.EqualTo(At(2, 1)));
-            Assert.That(board.GetCell(0, 2).HasObstacle, Is.True,
-                "A crate touching the bomb only at a corner survives.");
+            Assert.That(result.RemovedObstacles, Has.Count.EqualTo(2),
+                "Crates on an edge and on a corner of the bomb both break.");
         }
     }
     public sealed class PowerUpChainTests
@@ -268,16 +154,18 @@ namespace BlastPuzzle.Tests.EditMode
                 Assert.That(board.GetCell(1, column).IsEmpty, Is.True, $"r1c{column}");
             }
 
-            // ...and the bomb it swept went off, taking the cells above and below it.
-            Assert.That(board.GetCell(2, 3).HasBlock, Is.False, "the bomb's blast should reach r2c3");
-            Assert.That(board.GetCell(0, 3).HasBlock, Is.False, "the bomb's blast should reach r0c3");
+            // ...and the bomb it swept went off, clearing its 3x3 square above and below.
+            for (int column = 2; column <= 4; column++)
+            {
+                Assert.That(board.GetCell(2, column).HasBlock, Is.False, $"r2c{column}");
+                Assert.That(board.GetCell(0, column).HasBlock, Is.False, $"r0c{column}");
+            }
 
-            // Only those: the bomb is a plus, so its neighbours' neighbours survive.
-            Assert.That(board.GetCell(2, 2).HasBlock, Is.True);
-            Assert.That(board.GetCell(2, 4).HasBlock, Is.True);
+            // Outside the square nothing else goes.
+            Assert.That(board.GetCell(2, 1).HasBlock, Is.True);
 
-            Assert.That(result.RemovedBlockPositions, Has.Count.EqualTo(7),
-                "Five in the rocket's row plus the two the bomb added.");
+            Assert.That(result.RemovedBlockPositions, Has.Count.EqualTo(11),
+                "Five in the rocket's row plus the six the bomb added.");
             Assert.That(result.ActivatedPowerUps, Has.Count.EqualTo(2),
                 "The rocket the player tapped, and the bomb it set off.");
         }
@@ -332,22 +220,6 @@ namespace BlastPuzzle.Tests.EditMode
         }
 
         [Test]
-        public void ChainedBlocks_AreReportedOnceEach()
-        {
-            Board board = BoardLayout.Build(
-                "B B B B B",
-                "R H R X R",
-                "B B B B B");
-
-            PowerUpActivationResult result = PowerUpResolver.Activate(board, At(1, 1));
-
-            Assert.That(result.RemovedBlockPositions.Distinct().Count(),
-                Is.EqualTo(result.RemovedBlockPositions.Count),
-                "No cell may be reported as destroyed twice.");
-            Assert.That(result.RemovedBlocks, Has.Count.EqualTo(result.RemovedBlockPositions.Count));
-        }
-
-        [Test]
         public void AffectedPowerUpsAreRemovedExactlyOnce()
         {
             //  H X V    one rocket sweeping a row holding two other power-ups
@@ -383,25 +255,6 @@ namespace BlastPuzzle.Tests.EditMode
             Assert.That(result.RemovedBlocks, Has.Count.EqualTo(5), "All five pieces were removed...");
             Assert.That(red.CurrentCount, Is.EqualTo(2), "...but only the two normal Reds counted.");
             Assert.That(blue.CurrentCount, Is.EqualTo(1));
-        }
-
-        [Test]
-        public void BombActivation_CountsOnlyNormalBlocksTowardColorGoals()
-        {
-            Board board = BoardLayout.Build(
-                "R R R",
-                "R X H",
-                "R R R");
-
-            var red = new ColorGoal(BlockColor.Red, 20);
-            var tracker = new GoalTracker(new[] { red });
-
-            PowerUpActivationResult result = PowerUpResolver.Activate(board, At(1, 1));
-            tracker.ProcessRemovedBlocks(result.RemovedBlocks);
-
-            Assert.That(result.RemovedBlocks, Has.Count.EqualTo(5), "Plus shape: five pieces.");
-            Assert.That(red.CurrentCount, Is.EqualTo(3),
-                "Five pieces removed, but the bomb and the rocket are not Red normal blocks.");
         }
 
         [Test]

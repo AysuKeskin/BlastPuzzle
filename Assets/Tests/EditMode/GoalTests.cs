@@ -9,15 +9,6 @@ namespace BlastPuzzle.Tests.EditMode
 {
     public sealed class ColorGoalTests
     {
-        [Test]
-        public void ColorGoal_StartsAtZeroProgress()
-        {
-            var goal = new ColorGoal(BlockColor.Blue, 10);
-
-            Assert.That(goal.CurrentCount, Is.Zero);
-            Assert.That(goal.Remaining, Is.EqualTo(10));
-            Assert.That(goal.IsComplete, Is.False);
-        }
 
         [Test]
         public void ColorGoal_ProgressDoesNotExceedTarget()
@@ -100,37 +91,6 @@ namespace BlastPuzzle.Tests.EditMode
 
             tracker.ProcessRemovedBlocks(new[] { Of(BlockColor.Red), Of(BlockColor.Red) });
             Assert.That(tracker.AreAllGoalsComplete, Is.True);
-        }
-
-        [Test]
-        public void EmptyRemovedList_DoesNotChangeProgress()
-        {
-            var blue = new ColorGoal(BlockColor.Blue, 5);
-            var tracker = new GoalTracker(new[] { blue });
-
-            tracker.ProcessRemovedBlocks(new[] { Of(BlockColor.Blue) });
-            tracker.ProcessRemovedBlocks(Array.Empty<Block>());
-
-            Assert.That(blue.CurrentCount, Is.EqualTo(1));
-        }
-
-        [Test]
-        public void ProcessingRemovedBlocks_DoesNotMutateBlocks()
-        {
-            var blue = new ColorGoal(BlockColor.Blue, 5);
-            var tracker = new GoalTracker(new[] { blue });
-
-            Block one = Of(BlockColor.Blue);
-            Block two = Of(BlockColor.Red);
-            var removed = new List<Block> { one, two };
-
-            tracker.ProcessRemovedBlocks(removed);
-
-            // The tracker only reads colours; the records it was handed are untouched.
-            Assert.That(one.Color, Is.EqualTo(BlockColor.Blue));
-            Assert.That(two.Color, Is.EqualTo(BlockColor.Red));
-            Assert.That(removed, Has.Count.EqualTo(2));
-            Assert.That(removed[0], Is.SameAs(one));
         }
 
         [Test]

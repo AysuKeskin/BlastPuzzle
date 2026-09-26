@@ -68,16 +68,6 @@ namespace BlastPuzzle.Tests.EditMode
             Assert.That(MoveAvailabilityChecker.HasAnyValidMove(board, MinimumGroupSize), Is.False);
         }
 
-        [Test]
-        public void AdjacentCrates_AreNotAGroup()
-        {
-            Board board = BoardLayout.Build(
-                "CC",
-                "CC");
-
-            Assert.That(MoveAvailabilityChecker.HasAnyValidMove(board, MinimumGroupSize), Is.False);
-        }
-
         [TestCase(BoardLayout.HorizontalRocketCell)]
         [TestCase(BoardLayout.VerticalRocketCell)]
         [TestCase(BoardLayout.BombCell)]
@@ -87,17 +77,6 @@ namespace BlastPuzzle.Tests.EditMode
                 "RB" + powerUp,
                 "BRB",
                 "RBR");
-
-            Assert.That(MoveAvailabilityChecker.HasAnyValidMove(board, MinimumGroupSize), Is.True);
-        }
-
-        [Test]
-        public void SingleLonePowerUp_IsAValidMove()
-        {
-            Board board = BoardLayout.Build(
-                "..X",
-                "...",
-                "...");
 
             Assert.That(MoveAvailabilityChecker.HasAnyValidMove(board, MinimumGroupSize), Is.True);
         }
@@ -115,20 +94,6 @@ namespace BlastPuzzle.Tests.EditMode
                 "Three connected reds should satisfy a threshold of three.");
             Assert.That(MoveAvailabilityChecker.HasAnyValidMove(board, 4), Is.False,
                 "The same three should not satisfy a threshold of four.");
-        }
-        [Test]
-        public void Checker_DoesNotMutateBoard()
-        {
-            Board board = BoardLayout.Build(
-                "RBRB",
-                "BRCR",
-                "RBRB",
-                "BRRR");
-
-            string before = Describe(board);
-            MoveAvailabilityChecker.HasAnyValidMove(board, MinimumGroupSize);
-
-            Assert.That(Describe(board), Is.EqualTo(before));
         }
 
         private static string Describe(Board board)

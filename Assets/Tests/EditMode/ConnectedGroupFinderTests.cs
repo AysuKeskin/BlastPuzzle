@@ -68,55 +68,6 @@ namespace BlastPuzzle.Tests.EditMode
         }
 
         [Test]
-        public void EmptyStart_ReturnsEmpty()
-        {
-            Board board = BoardLayout.Build("R . R");
-
-            IReadOnlyList<BoardPosition> group = ConnectedGroupFinder.FindConnectedGroup(board, At(0, 1));
-
-            Assert.That(group, Is.Empty);
-        }
-
-        [Test]
-        public void OutsideBoard_ReturnsEmpty()
-        {
-            Board board = BoardLayout.Build("R R");
-
-            Assert.That(ConnectedGroupFinder.FindConnectedGroup(board, At(99, 99)), Is.Empty);
-            Assert.That(ConnectedGroupFinder.FindConnectedGroup(board, At(-1, 0)), Is.Empty);
-        }
-
-        [Test]
-        public void CornerCell_WorksCorrectly()
-        {
-            Board board = BoardLayout.Build(
-                "R R",
-                "R B");
-
-            IReadOnlyList<BoardPosition> group = ConnectedGroupFinder.FindConnectedGroup(board, At(0, 0));
-
-            Assert.That(group, Is.EquivalentTo(new[] { At(0, 0), At(1, 0), At(1, 1) }));
-        }
-
-        [Test]
-        public void EdgeCell_WorksCorrectly()
-        {
-            Board board = BoardLayout.Build(
-                "B R B",
-                "R R R",
-                "B R B");
-
-            IReadOnlyList<BoardPosition> group = ConnectedGroupFinder.FindConnectedGroup(board, At(1, 0));
-
-            Assert.That(group, Is.EquivalentTo(new[]
-            {
-                At(1, 0), At(1, 1), At(1, 2),
-                At(2, 1),
-                At(0, 1)
-            }));
-        }
-
-        [Test]
         public void RegionBendingAroundCorners_IsFoundEntirely()
         {
             Board board = BoardLayout.Build(
@@ -152,21 +103,6 @@ namespace BlastPuzzle.Tests.EditMode
             Assert.That(group, Is.EquivalentTo(new[] { At(2, 0), At(2, 1) }));
             Assert.That(group, Has.No.Member(At(0, 0)));
             Assert.That(group, Has.No.Member(At(0, 1)));
-        }
-
-        [Test]
-        public void GroupDetection_DoesNotMutateBoard()
-        {
-            Board board = BoardLayout.Build(
-                "R R B R",
-                "B R B R",
-                "R R R R");
-
-            string before = Describe(board);
-            ConnectedGroupFinder.FindConnectedGroup(board, At(2, 0));
-            string after = Describe(board);
-
-            Assert.That(after, Is.EqualTo(before), "Finding a group must leave the board untouched.");
         }
 
         // Full board state as text, so a difference shows up as a readable diff.

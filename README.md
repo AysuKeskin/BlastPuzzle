@@ -213,7 +213,6 @@ The goal was a small set of core systems done carefully rather than feature brea
 - The block, power-up, crate, UI and VFX artwork and the sound effects were generated with AI tools from the developer's prompts.
 - The font is LiberationSans from the TextMesh Pro essentials, under the SIL Open Font License (`Assets/TextMesh Pro/Fonts/LiberationSans - OFL.txt`).
 - Unity packages are covered by their own Unity licences.
-- Code was written with AI assistance and reviewed and revised by the developer.
 - No licence has been chosen for this repository yet.
 
 More detail on design decisions: [Docs/ARCHITECTURE.md](Docs/ARCHITECTURE.md).

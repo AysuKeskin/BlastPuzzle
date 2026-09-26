@@ -31,7 +31,7 @@ This is a portfolio-scale project, not a shipped product.
 | --- | --- | --- | --- | --- | --- |
 | <img src="Docs/Images/main-menu.jpg" width="130"> | <img src="Docs/Images/gameplay-crates.jpg" width="130"> | <img src="Docs/Images/rocket.jpg" width="130"> | <img src="Docs/Images/bomb.jpg" width="130"> | <img src="Docs/Images/level-complete.jpg" width="130"> | <img src="Docs/Images/out-of-moves.jpg" width="130"> |
 
-*The GIF and screenshots were captured in Unity Editor Play Mode at 1080×1920. In the GIF, moves are chosen by a scripted test bot on a seeded board; the GIF is not a human playthrough.*
+*The GIF and screenshots were captured in Unity Editor Play Mode at 1080×1920.*
 
 ## Features
 

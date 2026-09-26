@@ -8,8 +8,6 @@ using UnityEngine;
 
 namespace BlastPuzzle.Tests.EditMode
 {
-    // Move and end-state rules that never reach the BoardView, so they need no scene.
-    // The ones that DO resolve a full move live in the PlayMode suite.
     public sealed class GameplayControllerRulesTests
     {
         private GameObject host;
@@ -58,6 +56,16 @@ namespace BlastPuzzle.Tests.EditMode
         }
 
         [Test]
+        public void UnplayableInitialBoard_OffersRetryAndRejectsInput()
+        {
+            Initialise(BoardLayout.Build("R B"));
+            Assert.That(controller.State, Is.EqualTo(GameplayState.Blocked));
+            controller.HandleBlockSelected(At(0, 0));
+            Assert.That(controller.MovesRemaining, Is.EqualTo(20));
+            Assert.That(blueGoal.CurrentCount, Is.Zero);
+        }
+
+        [Test]
         public void Initialise_RejectsNonsenseMoveLimit()
         {
             Assert.Throws<System.ArgumentOutOfRangeException>(() => Initialise(BoardLayout.Build("R R"), moveLimit: 0));
@@ -66,8 +74,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void InvalidSelection_DoesNotConsumeMove()
         {
-            //  R B   the lone Red is a real group, but below the minimum size
-            //  B B
             Initialise(BoardLayout.Build(
                 "R B",
                 "B B"));
@@ -82,7 +88,7 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void EmptySelection_DoesNotConsumeMove()
         {
-            Initialise(BoardLayout.Build("R . R"));
+            Initialise(BoardLayout.Build("R . R R"));
 
             controller.HandleBlockSelected(At(0, 1));
 
@@ -105,10 +111,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void SelectingCrate_DoesNothingAndDoesNotThrow()
         {
-            // Regression: a crate cell is NOT empty, so an IsEmpty check here let the tap
-            // fall through to cell.Block.Color and threw a NullReferenceException.
-            //  R R
-            //  C B
             Initialise(BoardLayout.Build(
                 "R R",
                 "C B"));
@@ -124,9 +126,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void WonState_IgnoresPowerUpTap()
         {
-            // A power-up tap is a valid move with no minimum-group rule, so only the
-            // terminal state can stop it. No BoardView is wired: if the guard failed, the
-            // activation pipeline would run and throw rather than pass quietly.
             Board board = BoardLayout.Build(
                 "H R",
                 "B B");
@@ -161,10 +160,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void TappingPowerUpIsNotAnUndersizedGroup()
         {
-            // A lone rocket would be a "group of 1" under the normal rule. It must still be
-            // activatable -- the minimum-group rule does not apply to power-ups. Here we only
-            // assert it is not REJECTED as undersized; the full activation is covered in
-            // PlayMode where a BoardView exists.
             Board board = BoardLayout.Build(
                 "H R",
                 "B B");
@@ -179,8 +174,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void WonState_IgnoresFurtherSelections()
         {
-            // A genuinely valid group: without the terminal guard this WOULD blast. No
-            // BoardView is wired, so a failed guard throws rather than passing quietly.
             Initialise(BoardLayout.Build(
                 "R R",
                 "B B"));

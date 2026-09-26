@@ -9,11 +9,6 @@ using UnityEngine.Pool;
 namespace BlastPuzzle.Presentation
 {
     // Renders a logical Board as a grid of BlockViews parented under this object.
-    //
-    // The dependency runs one way only: BoardView reads Board. Board has never heard of
-    // BoardView, so the logical state is never derived from where a Transform happens to be.
-    // This class contains no gameplay rules -- no matching, no gravity, no scoring. It
-    // answers one question: "given this board, what should be on screen?"
     public sealed class BoardView : MonoBehaviour
     {
         [SerializeField]
@@ -28,11 +23,123 @@ namespace BlastPuzzle.Presentation
         [SerializeField]
         private float spacing = 0.05f;
 
+        [Header("Camera framing")]
+        [SerializeField] private bool fitCameraToBoard = true;
+        [SerializeField] private Camera boardCamera;
+        [Tooltip("Normalized screen area reserved for the board, leaving room for the HUD.")]
+        [SerializeField] private Rect boardViewport = new Rect(0.04f, 0.12f, 0.92f, 0.64f);
+        private Vector2 lastScreenSize;
+        private Rect lastSafeArea;
+        private RectTransform hudBottomBoundary;
+        private Canvas hudCanvas;
+        private float lastHudBottom = 1f;
+        private readonly Vector3[] hudCorners = new Vector3[4];
+
+        public void SetHudBoundary(RectTransform boundary)
+        {
+            hudBottomBoundary = boundary;
+            hudCanvas = boundary != null ? boundary.GetComponentInParent<Canvas>() : null;
+            RefreshCamera();
+        }
+
+        private float HudBottom()
+        {
+            if (hudBottomBoundary == null || hudCanvas == null || Screen.height <= 0) return 1f;
+            hudBottomBoundary.GetWorldCorners(hudCorners);
+            Camera uiCamera = hudCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : hudCanvas.worldCamera;
+            return RectTransformUtility.WorldToScreenPoint(uiCamera, hudCorners[0]).y / Screen.height - 0.025f;
+        }
+        private readonly Dictionary<BlockView, Coroutine> selectionFeedback =
+            new Dictionary<BlockView, Coroutine>();
+
+        private void LateUpdate()
+        {
+            if (lastScreenSize != new Vector2(Screen.width, Screen.height) || lastSafeArea != Screen.safeArea ||
+                !Mathf.Approximately(lastHudBottom, HudBottom())) RefreshCamera();
+        }
+
+        private void RefreshCamera()
+        {
+            lastScreenSize = new Vector2(Screen.width, Screen.height);
+            lastSafeArea = Screen.safeArea;
+            if (!fitCameraToBoard || board == null) return;
+            if (boardCamera == null) boardCamera = Camera.main;
+            if (boardCamera == null || Screen.width <= 0 || Screen.height <= 0) return;
+
+            Canvas.ForceUpdateCanvases();
+            lastHudBottom = HudBottom();
+            Rect safe = Screen.safeArea;
+            Rect area = Rect.MinMaxRect(
+                Mathf.Max(boardViewport.xMin, safe.xMin / Screen.width),
+                Mathf.Max(boardViewport.yMin, safe.yMin / Screen.height),
+                Mathf.Min(boardViewport.xMax, safe.xMax / Screen.width),
+                Mathf.Min(boardViewport.yMax, safe.yMax / Screen.height, lastHudBottom));
+            FitCamera(boardCamera, area);
+        }
+
+        // The gameplay camera is orthographic and uses a full-screen viewport.
+        public void FitCamera(Camera camera, Rect area)
+        {
+            if (board == null || camera == null || !camera.orthographic ||
+                area.width <= 0f || area.height <= 0f) return;
+
+            Vector3 center = camera.transform.InverseTransformPoint(transform.position);
+            float halfWidth = 0f;
+            float halfHeight = 0f;
+            for (int x = -1; x <= 1; x += 2)
+                for (int y = -1; y <= 1; y += 2)
+                {
+                    Vector3 corner = camera.transform.InverseTransformPoint(transform.TransformPoint(
+                        new Vector3(x * HalfBoardWidth, y * HalfBoardHeight, 0f)));
+                    halfWidth = Mathf.Max(halfWidth, Mathf.Abs(corner.x - center.x));
+                    halfHeight = Mathf.Max(halfHeight, Mathf.Abs(corner.y - center.y));
+                }
+
+            const float padding = 0.25f;
+            camera.orthographicSize = Mathf.Max(
+                (halfHeight + padding) / area.height,
+                (halfWidth + padding) / (camera.aspect * area.width));
+            Vector2 offset = area.center - new Vector2(0.5f, 0.5f);
+            float height = 2f * camera.orthographicSize;
+            camera.transform.position += camera.transform.right * (center.x - offset.x * height * camera.aspect)
+                + camera.transform.up * (center.y - offset.y * height);
+        }
+
+        public void ShowInvalidSelection(Block block)
+        {
+            BlockView view = GetViewFor(block);
+            if (view == null || selectionFeedback.ContainsKey(view)) return;
+            selectionFeedback.Add(view, StartCoroutine(ShakeSelection(view, block)));
+        }
+
+        private IEnumerator ShakeSelection(BlockView view, Block block)
+        {
+            const float duration = 0.18f;
+            float elapsed = 0f;
+            while (elapsed < duration && view != null && ReferenceEquals(view.Block, block))
+            {
+                float t = elapsed / duration;
+                view.transform.localRotation = Quaternion.Euler(0f, 0f,
+                    Mathf.Sin(t * Mathf.PI * 6f) * 9f * (1f - t));
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+            if (view != null && ReferenceEquals(view.Block, block))
+                view.transform.localRotation = Quaternion.identity;
+            selectionFeedback.Remove(view);
+        }
+
+        public void CancelSelectionFeedback()
+        {
+            foreach (var pair in selectionFeedback)
+            {
+                StopCoroutine(pair.Value);
+                if (pair.Key != null) pair.Key.transform.localRotation = Quaternion.identity;
+            }
+            selectionFeedback.Clear();
+        }
+
         // --- animation timing ------------------------------------------------------------
-        //
-        // All presentation tuning, deliberately here rather than on LevelDefinition: how
-        // long a block takes to fall is not a property of a level, and a designer changing
-        // level 3 should not be able to change how the game feels everywhere.
         [Header("Animation timing (seconds)")]
         [SerializeField] private float removalDuration = 0.14f;
         [SerializeField] private float crateRemovalDuration = 0.16f;
@@ -42,21 +149,15 @@ namespace BlastPuzzle.Presentation
         [SerializeField] private float refillPerCellDuration = 0.035f;
         [SerializeField] private float powerUpPopDuration = 0.18f;
         [SerializeField] private float activationDuration = 0.12f;
+        [SerializeField] private float shuffleBaseDuration = 0.18f;
+        [SerializeField] private float shufflePerCellDuration = 0.02f;
 
-        // BlockViews are recycled rather than destroyed. Refill creates one per removed
-        // block every single move, so without this the game would Instantiate and Destroy
-        // ten-odd GameObjects per tap for the whole session.
-        //
-        // The pool lives HERE rather than in its own component because BoardView already
-        // owns BlockView lifecycle -- it creates them, maps them to blocks and disposes of
-        // them. Splitting that across two objects would divide one responsibility and add a
-        // scene reference to wire, for no gain. It is deliberately specific to BlockView:
-        // no IPoolable, no registry, no generic framework for a single pooled type.
+        [Tooltip("Optional. Cosmetic effects; the board works without it.")]
+        [SerializeField] private GameplayVFX vfx;
+
+        private readonly List<Vector3> vfxPositions = new List<Vector3>();
+        private readonly List<BlockColor> vfxColors = new List<BlockColor>();
         private ObjectPool<BlockView> viewPool;
-
-        // Development instrumentation. TotalViewsCreated is the number of GameObjects ever
-        // instantiated; if pooling works it stops rising once the board has warmed up,
-        // however many moves are played.
         public int TotalViewsCreated { get; private set; }
 
         public int PoolInactiveCount => viewPool?.CountInactive ?? 0;
@@ -75,49 +176,76 @@ namespace BlastPuzzle.Presentation
         // One view's journey for this phase. A struct in a reused list: no per-frame garbage.
         private readonly struct ViewTravel
         {
-            public ViewTravel(BlockView view, Vector3 from, Vector3 to, float duration)
+            public ViewTravel(BlockView view, Vector3 from, Vector3 to, float duration, bool appear = false)
             {
                 View = view;
                 From = from;
                 To = to;
                 Duration = duration;
+                Appear = appear;
             }
 
             public BlockView View { get; }
             public Vector3 From { get; }
             public Vector3 To { get; }
             public float Duration { get; }
+            public bool Appear { get; }
         }
-
-        // Reference identity, not value equality: Block does not override Equals, so two
-        // blocks are the same key only if they are literally the same object. That is
-        // exactly what is wanted -- "the view showing THIS block" -- and it is what lets
-        // Milestone 5/6 find the right view for a block that was removed or moved.
         private readonly Dictionary<Block, BlockView> viewsByBlock = new Dictionary<Block, BlockView>();
-
-        // Crates are keyed by POSITION, not by object identity, precisely because they never
-        // move: a crate's cell identifies it for its whole life. Blocks need identity keys
-        // because gravity relocates them and a coordinate would go stale mid-move.
         private readonly Dictionary<BoardPosition, CrateView> crateViewsByPosition =
             new Dictionary<BoardPosition, CrateView>();
 
         private Board board;
+        private Sprite boardAreaSprite;
+        private Transform boardArea;
+        private Transform boardFrame;
+        private Transform boardBackdrop;
+
+        private void ConfigureBoardArea()
+        {
+            if (boardArea == null)
+            {
+                boardAreaSprite = Sprite.Create(Texture2D.whiteTexture,
+                    new Rect(0, 0, 1, 1), new Vector2(.5f, .5f), 1f);
+                var maskObject = new GameObject("BoardClip", typeof(SpriteMask));
+                boardArea = maskObject.transform;
+                boardArea.SetParent(transform, false);
+                maskObject.GetComponent<SpriteMask>().sprite = boardAreaSprite;
+                boardFrame = CreateBoardSurface("BoardFrame", new Color(.30f, .42f, .55f), -12);
+                boardBackdrop = CreateBoardSurface("BoardBackdrop", new Color(.035f, .075f, .12f), -11);
+            }
+            boardArea.gameObject.SetActive(true);
+            boardFrame.gameObject.SetActive(true);
+            boardBackdrop.gameObject.SetActive(true);
+            boardArea.localScale = new Vector3(HalfBoardWidth * 2f, HalfBoardHeight * 2f, 1f);
+            boardFrame.localScale = new Vector3(HalfBoardWidth * 2f + .18f, HalfBoardHeight * 2f + .18f, 1f);
+            boardBackdrop.localScale = new Vector3(HalfBoardWidth * 2f + .08f, HalfBoardHeight * 2f + .08f, 1f);
+        }
+
+        private Transform CreateBoardSurface(string objectName, Color color, int order)
+        {
+            var surface = new GameObject(objectName, typeof(SpriteRenderer));
+            surface.transform.SetParent(transform, false);
+            var renderer = surface.GetComponent<SpriteRenderer>();
+            renderer.sprite = boardAreaSprite;
+            renderer.color = color;
+            renderer.sortingOrder = order;
+            return surface.transform;
+        }
 
         // Distance from one cell's centre to the next, including the gap between them.
         private float CellStride => cellSize + spacing;
-
-        // Half the board's visible extent: every cell's width plus the gaps between them.
-        // n cells and (n - 1) gaps, i.e. n * stride - one trailing gap.
         private float HalfBoardWidth => (board.Columns * CellStride - spacing) * 0.5f;
 
         private float HalfBoardHeight => (board.Rows * CellStride - spacing) * 0.5f;
 
-        // One-shot render. No events and no per-frame Update: nothing changes the board
-        // yet, so re-rendering on a schedule would be work with no cause.
+        // Rebuild views for a new attempt and fit its board into the available screen area.
         public void Build(Board boardToRender)
         {
             Clear();
             board = boardToRender;
+            ConfigureBoardArea();
+            RefreshCamera();
 
             for (int row = 0; row < board.Rows; row++)
             {
@@ -130,10 +258,6 @@ namespace BlastPuzzle.Presentation
                         CreateCrateViewFor(cell.Obstacle, cell.Position);
                         continue;
                     }
-
-                    // An empty cell gets no view at all, rather than a hidden or
-                    // transparent one. "No block here" and "a block you cannot see"
-                    // must never be the same thing on screen.
                     if (!cell.HasBlock)
                     {
                         continue;
@@ -144,18 +268,19 @@ namespace BlastPuzzle.Presentation
             }
         }
 
-        // Animates existing views to the cells their blocks now occupy.
-        //
-        // No view is created and none is destroyed: these are the same objects, found by
-        // Block identity, being repositioned. The board has ALREADY settled by the time this
-        // runs -- these moves describe what happened, they do not cause it.
-        //
-        // ONE coroutine drives every falling view. Yielding per block would serialise them:
-        // fifteen blocks would fall one after another over several seconds instead of
-        // together in a fraction of one. Here each view's progress is computed against its
-        // own duration inside a single per-frame loop, so they travel concurrently and the
-        // whole phase costs one coroutine regardless of how many blocks move.
-        public IEnumerator AnimateMoves(IReadOnlyList<BlockMove> moves)
+        // Blocks falling into the cells gravity moved them to.
+        public IEnumerator AnimateMoves(IReadOnlyList<BlockMove> moves) =>
+            AnimateBlockMoves(moves, gravityBaseDuration, gravityPerCellDuration);
+
+        // Blocks sliding to new cells after a deadlock was cleared.
+        public IEnumerator AnimateShuffle(IReadOnlyList<BlockMove> moves) =>
+            AnimateBlockMoves(moves, shuffleBaseDuration, shufflePerCellDuration);
+
+        // The one place existing views are repositioned to match the board.
+        private IEnumerator AnimateBlockMoves(
+            IReadOnlyList<BlockMove> moves,
+            float baseDuration,
+            float perCellDuration)
         {
             travels.Clear();
             float longest = 0f;
@@ -166,16 +291,15 @@ namespace BlastPuzzle.Presentation
                 {
                     continue;
                 }
-
-                // The cached coordinate follows the BOARD immediately; only the transform
-                // lags behind and animates.
                 view.SetBoardPosition(move.To);
                 view.name = ViewName(move.To);
 
                 Vector3 from = view.transform.localPosition;
                 Vector3 to = BoardPositionToLocalPosition(move.To);
-                float duration = gravityBaseDuration
-                    + Mathf.Abs(move.From.Row - move.To.Row) * gravityPerCellDuration;
+                int distance = Mathf.Abs(move.From.Row - move.To.Row)
+                    + Mathf.Abs(move.From.Column - move.To.Column);
+
+                float duration = baseDuration + distance * perCellDuration;
 
                 travels.Add(new ViewTravel(view, from, to, duration));
                 longest = Mathf.Max(longest, duration);
@@ -184,19 +308,11 @@ namespace BlastPuzzle.Presentation
             yield return RunTravels(longest);
         }
 
-        // Creates the views for newly spawned blocks ABOVE the board and drops them in.
-        //
-        // BlockSpawn stays pure logical data -- block and target cell. The entry height is
-        // computed HERE, because where a block visually comes from is a presentation choice
-        // that RefillResolver has no business knowing.
+        // Open columns refill from above; cells beneath a crate fade in at their destination.
         public IEnumerator AnimateSpawns(IReadOnlyList<BlockSpawn> spawns)
         {
             travels.Clear();
             float longest = 0f;
-
-            // Stagger by column: several blocks entering the same column start at
-            // successively greater heights so they queue up rather than overlapping. Spawns
-            // arrive column-major, bottom-to-top, so a per-column counter is enough.
             int lastColumn = -1;
             int indexInColumn = 0;
 
@@ -209,23 +325,33 @@ namespace BlastPuzzle.Presentation
                 }
 
                 BlockView view = CreateViewFor(spawn.Block, spawn.Position);
-
-                // One row above the top of the board, plus one more for each block already
-                // entering this column.
                 var entry = new BoardPosition(board.Rows + indexInColumn, spawn.Position.Column);
-                Vector3 from = BoardPositionToLocalPosition(entry);
                 Vector3 to = BoardPositionToLocalPosition(spawn.Position);
+                bool covered = HasObstacleAbove(spawn.Position);
+                Vector3 from = covered ? to : BoardPositionToLocalPosition(entry);
                 view.SetLocalPosition(from);
+                if (covered)
+                {
+                    view.SetScale(0.75f);
+                    view.SetAlpha(0f);
+                }
 
                 float distance = entry.Row - spawn.Position.Row;
-                float duration = refillBaseDuration + distance * refillPerCellDuration;
+                float duration = covered ? refillBaseDuration : refillBaseDuration + distance * refillPerCellDuration;
 
-                travels.Add(new ViewTravel(view, from, to, duration));
+                travels.Add(new ViewTravel(view, from, to, duration, covered));
                 longest = Mathf.Max(longest, duration);
-                indexInColumn++;
+                if (!covered) indexInColumn++;
             }
 
             yield return RunTravels(longest);
+        }
+
+        private bool HasObstacleAbove(BoardPosition position)
+        {
+            for (int row = position.Row + 1; row < board.Rows; row++)
+                if (board.GetCell(row, position.Column).HasObstacle) return true;
+            return false;
         }
 
         // The shared batch loop: advance every travel each frame, then snap them all exactly.
@@ -245,26 +371,25 @@ namespace BlastPuzzle.Presentation
                 for (int i = 0; i < travels.Count; i++)
                 {
                     ViewTravel travel = travels[i];
-                    float t = Mathf.Clamp01(elapsed / travel.Duration);
+                    float t = travel.Duration <= 0f ? 1f : Mathf.Clamp01(elapsed / travel.Duration);
                     travel.View.SetLocalPosition(Vector3.Lerp(travel.From, travel.To, EaseOutCubic(t)));
+                    if (travel.Appear)
+                    {
+                        travel.View.SetScale(Mathf.Lerp(0.75f, 1f, EaseOutCubic(t)));
+                        travel.View.SetAlpha(t);
+                    }
                 }
 
                 yield return null;
             }
-
-            // Snap explicitly rather than trusting the loop to land on t == 1. A frame is
-            // never exactly the remaining time, so without this every view would sit a
-            // fraction of a pixel short and the error would accumulate across moves.
             for (int i = 0; i < travels.Count; i++)
             {
                 travels[i].View.SetLocalPosition(travels[i].To);
+                if (travels[i].Appear) travels[i].View.ResetAppearance();
             }
 
             travels.Clear();
         }
-
-        // Fast at first, settling gently at the end -- how a falling object reads. Linear
-        // motion looks mechanical because the block arrives at full speed and stops dead.
         private static float EaseOutCubic(float t)
         {
             float inverted = 1f - t;
@@ -272,11 +397,6 @@ namespace BlastPuzzle.Presentation
         }
 
         // Creates one view per newly spawned Block.
-        //
-        // Only the new blocks get views: everything that survived gravity keeps the view it
-        // already had, repositioned by ApplyMoves. Recreating survivors would throw away
-        // objects that are already correct and, worse, break the Block -> BlockView identity
-        // that the rest of the presentation layer depends on.
         public void AddViews(IEnumerable<BlockSpawn> spawns)
         {
             foreach (BlockSpawn spawn in spawns)
@@ -286,22 +406,14 @@ namespace BlastPuzzle.Presentation
         }
 
         // Animates the destruction of blocks and crates TOGETHER, then destroys their views.
-        //
-        // One loop for both, so a crate breaks at the same moment as the blocks beside it
-        // rather than afterwards. Crates must be visually gone before gravity starts, since
-        // their cells are about to be fallen through -- running this phase to completion
-        // before the gravity phase is what guarantees that.
-        //
-        // The dictionary entries are dropped IMMEDIATELY, before any animation: a removed
-        // block must stop being queryable through BoardView the instant the board says it is
-        // gone. Only a local reference to the doomed GameObject is kept, so it can finish
-        // its animation while already being logically absent.
         public IEnumerator AnimateDestruction(
             IReadOnlyList<Block> blocks,
             IReadOnlyList<ObstacleRemoval> obstacles)
         {
             dyingBlocks.Clear();
             dyingCrates.Clear();
+            vfxPositions.Clear();
+            vfxColors.Clear();
 
             foreach (Block block in blocks)
             {
@@ -310,12 +422,35 @@ namespace BlastPuzzle.Presentation
                     continue;
                 }
 
+                // Mapping dropped before the release, so a dead block can never resolve
+                // to a view that now belongs to a live one.
                 viewsByBlock.Remove(block);
 
                 if (view != null)
                 {
                     dyingBlocks.Add(view);
+
+                    // Position and colour are collected HERE, where the block and its view
+                    // are both in hand. Pairing them afterwards by index was wrong: blocks
+                    // without a view are skipped above, so the lists drifted apart and a
+                    // blue block could be given the next block's colour.
+                    vfxPositions.Add(view.transform.position);
+                    vfxColors.Add(block.Color);
                 }
+            }
+
+            if (vfx != null)
+            {
+                vfx.PlayBlockBurst(vfxPositions, vfxColors);
+
+                vfxPositions.Clear();
+
+                foreach (ObstacleRemoval removal in obstacles)
+                {
+                    vfxPositions.Add(transform.TransformPoint(BoardPositionToLocalPosition(removal.Position)));
+                }
+
+                vfx.PlayCrateBreak(vfxPositions);
             }
 
             foreach (ObstacleRemoval removal in obstacles)
@@ -365,11 +500,8 @@ namespace BlastPuzzle.Presentation
 
                 yield return null;
             }
-
-            // Released only NOW, after the removal animation has finished. Releasing at the
-            // moment the block died would let refill hand the same GameObject straight back
-            // out while this loop was still shrinking and fading it -- the new block would
-            // visibly dissolve on arrival.
+            // Released only now, after the animation: releasing earlier would let refill
+            // hand the same object out while it was still fading.
             foreach (BlockView view in dyingBlocks)
             {
                 ReleaseView(view);
@@ -394,13 +526,11 @@ namespace BlastPuzzle.Presentation
                 ? Mathf.Lerp(1f, peakScale, t / peakAt)
                 : Mathf.Lerp(peakScale, 0f, (t - peakAt) / (1f - peakAt));
         }
-
-        // A newly earned power-up swelling into existence at the tapped cell. Its logical
-        // Block already exists on the board; only the entrance is animated.
         public IEnumerator AnimatePowerUpCreation(BlockSpawn spawn)
         {
             BlockView view = CreateViewFor(spawn.Block, spawn.Position);
             view.SetLocalPosition(BoardPositionToLocalPosition(spawn.Position));
+            vfx?.PlayPowerUpCreated(view.transform.position);
 
             float elapsed = 0f;
 
@@ -420,9 +550,6 @@ namespace BlastPuzzle.Presentation
 
             view.ResetAppearance();
         }
-
-        // A brief swell on the power-up the player tapped, so the cause of the clear is
-        // readable before its footprint disappears.
         public IEnumerator AnimateActivation(Block powerUp)
         {
             if (!viewsByBlock.TryGetValue(powerUp, out BlockView view) || view == null)
@@ -430,12 +557,26 @@ namespace BlastPuzzle.Presentation
                 yield break;
             }
 
+            // Every fired power-up, including chain reactions, gets its own effect.
+            if (vfx != null)
+            {
+                if (powerUp.Kind == BlockKind.Rocket)
+                {
+                    vfx.PlayRocketStreak(view.transform.position, powerUp.Direction);
+                }
+                else if (powerUp.Kind == BlockKind.Bomb)
+                {
+                    vfx.PlayBombBlast(view.transform.position);
+                }
+            }
+
+            float duration = vfx != null ? Mathf.Max(activationDuration, vfx.ActivationDuration(powerUp.Kind)) : activationDuration;
             float elapsed = 0f;
 
-            while (elapsed < activationDuration)
+            while (elapsed < duration)
             {
                 elapsed += Time.deltaTime;
-                float t = Mathf.Clamp01(elapsed / activationDuration);
+                float t = Mathf.Clamp01(elapsed / duration);
 
                 // Out and back: 1 -> 1.3 -> 1
                 float scale = t < 0.5f
@@ -458,10 +599,6 @@ namespace BlastPuzzle.Presentation
                 {
                     continue;
                 }
-
-                // Drop the entry first, for the same reason as blocks: Destroy only takes
-                // effect at end of frame, and a stale entry would keep handing out a view
-                // that is about to vanish.
                 crateViewsByPosition.Remove(removal.Position);
 
                 if (view != null)
@@ -470,9 +607,6 @@ namespace BlastPuzzle.Presentation
                 }
             }
         }
-
-        // Removes the views showing these blocks immediately, without rebuilding the rest
-        // of the board and without animating. Blocks with no view are simply skipped.
         public void RemoveViews(IEnumerable<Block> blocks)
         {
             foreach (Block block in blocks)
@@ -481,11 +615,6 @@ namespace BlastPuzzle.Presentation
                 {
                     continue;
                 }
-
-                // Drop the dictionary entry FIRST. The view is about to go back into the
-                // pool and can be handed straight out to a different Block, so a surviving
-                // entry would map a dead Block to a view that now belongs to a live one --
-                // and ViewCount would drift away from the board's occupied count.
                 viewsByBlock.Remove(block);
 
                 ReleaseView(view);
@@ -495,9 +624,7 @@ namespace BlastPuzzle.Presentation
         // Returns every view this component created to the pool and forgets them.
         public void Clear()
         {
-            // Copy first: releasing mutates nothing here, but clearing the dictionary while
-            // enumerating it would throw, and a rebuild for a different level runs exactly
-            // this path.
+            CancelSelectionFeedback();
             releaseBuffer.Clear();
             releaseBuffer.AddRange(viewsByBlock.Values);
             viewsByBlock.Clear();
@@ -508,11 +635,6 @@ namespace BlastPuzzle.Presentation
             }
 
             releaseBuffer.Clear();
-
-            // Crates are still destroyed. There are a handful per level and they never
-            // respawn during play, so pooling them would add a second lifecycle to reason
-            // about in exchange for almost no churn. Worth revisiting only if profiling
-            // ever shows crate churn mattering.
             foreach (CrateView view in crateViewsByPosition.Values)
             {
                 if (view != null)
@@ -523,31 +645,18 @@ namespace BlastPuzzle.Presentation
 
             crateViewsByPosition.Clear();
             board = null;
+            if (boardArea != null) boardArea.gameObject.SetActive(false);
+            if (boardFrame != null) boardFrame.gameObject.SetActive(false);
+            if (boardBackdrop != null) boardBackdrop.gameObject.SetActive(false);
         }
 
         // Turns a logical grid coordinate into a local offset from this object's origin.
-        //
-        // Row 0 is the bottom row and column 0 the left, matching the domain convention,
-        // so +row moves up (+y) and +column moves right (+x) with no flip anywhere.
-        //
-        // Centering: cell centres run from index 0 to index (count - 1), so the midpoint
-        // of that range is (count - 1) / 2. Subtracting it puts the middle of the board at
-        // this object's origin. Note the 0.5f rather than an integer 2: with 8 columns the
-        // centre sits at 3.5, and integer division would truncate it to 3 and shift the
-        // whole board half a cell off-centre.
         public Vector3 BoardPositionToLocalPosition(BoardPosition position)
         {
             float x = (position.Column - (board.Columns - 1) * 0.5f) * CellStride;
             float y = (position.Row - (board.Rows - 1) * 0.5f) * CellStride;
             return new Vector3(x, y, 0f);
         }
-
-        // The inverse of BoardPositionToLocalPosition: a point in the world becomes the
-        // grid coordinate it falls on. This is arithmetic, not a physics query -- see the
-        // milestone notes for why a uniform grid does not need colliders.
-        //
-        // Returns false when the point lies outside the board, which is how "tapped the
-        // background" is distinguished from "tapped a cell".
         public bool TryGetBoardPosition(Vector3 worldPosition, out BoardPosition position)
         {
             position = default;
@@ -559,20 +668,10 @@ namespace BlastPuzzle.Presentation
 
             // Into this object's local space first, so moving or scaling BoardRoot keeps working.
             Vector3 local = transform.InverseTransformPoint(worldPosition);
-
-            // Reject anything beyond the board's visible rectangle BEFORE rounding.
-            // Without this, rounding to nearest extends each edge cell's catchment half a
-            // gap (spacing / 2) past the artwork, so a tap just outside the board would
-            // snap back onto an edge block. Interior gaps are unaffected: they lie inside
-            // this rectangle and still resolve to the nearest cell.
             if (Mathf.Abs(local.x) > HalfBoardWidth || Mathf.Abs(local.y) > HalfBoardHeight)
             {
                 return false;
             }
-
-            // Rounding to the nearest index means a tap landing in the gap between two
-            // blocks resolves to the closer one, rather than being swallowed. On a phone
-            // that forgiveness matters more than pixel-exactness.
             int column = Mathf.RoundToInt(local.x / CellStride + (board.Columns - 1) * 0.5f);
             int row = Mathf.RoundToInt(local.y / CellStride + (board.Rows - 1) * 0.5f);
 
@@ -602,13 +701,10 @@ namespace BlastPuzzle.Presentation
 
             crateViewsByPosition.Add(position, view);
         }
-
-        // Inactive pooled GameObjects are children of this transform, so Unity destroys them
-        // with it. Clearing the pool explicitly keeps that intent obvious and releases the
-        // stack immediately rather than at scene teardown.
         private void OnDestroy()
         {
             viewPool?.Clear();
+            if (boardAreaSprite != null) Destroy(boardAreaSprite);
         }
 
         private static string ViewName(BoardPosition position) =>
@@ -619,9 +715,6 @@ namespace BlastPuzzle.Presentation
 
         private ObjectPool<BlockView> CreatePool()
         {
-            // A full board is the steady-state demand. Double it for headroom: during a move
-            // the removed views are still animating out while the refill views are being
-            // taken, so both generations are briefly alive at once.
             int cells = board != null ? board.Rows * board.Columns : DefaultPoolCapacity;
 
             return new ObjectPool<BlockView>(
@@ -662,19 +755,11 @@ namespace BlastPuzzle.Presentation
 
         private BlockView CreateViewFor(Block block, BoardPosition position)
         {
-            // Get returns a recycled view when one is available and only instantiates when
-            // the pool is empty. Bind then overwrites every piece of visual state, so a view
-            // that previously showed a bomb cannot bring anything of that life with it.
             BlockView view = Pool.Get();
             view.Bind(block, position);
 
-            // The single place a new view's starting position is decided. Milestone 14 can
-            // start it above the board and animate it down to here, and nothing outside this
-            // class -- least of all RefillResolver -- needs to know.
+            // Spawn animations may override this resting position.
             view.SetLocalPosition(BoardPositionToLocalPosition(position));
-
-            // Naming generated objects after their coordinate makes the live hierarchy
-            // readable while debugging.
             view.name = ViewName(position);
 
             viewsByBlock.Add(block, view);

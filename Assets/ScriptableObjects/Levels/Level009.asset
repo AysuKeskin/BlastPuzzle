@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: be2d15b2b6d2a40b69f5a4167ece3efc, type: 3}
+  m_Name: Level009
+  m_EditorClassIdentifier: BlastPuzzle.Runtime::BlastPuzzle.Levels.LevelDefinition
+  levelNumber: 9
+  rows: 8
+  columns: 8
+  moveLimit: 19
+  availableColors: 0000000001000000020000000300000004000000i
+  goals:
+  - color: 1
+    targetCount: 13
+  - color: 3
+    targetCount: 11
+  - color: 2
+    targetCount: 9
+  obstacles:
+  - row: 2
+    column: 2
+    type: 0
+  - row: 3
+    column: 2
+    type: 0
+  - row: 4
+    column: 2
+    type: 0
+  - row: 5
+    column: 2
+    type: 0
+  - row: 2
+    column: 5
+    type: 0
+  - row: 3
+    column: 5
+    type: 0
+  - row: 4
+    column: 5
+    type: 0
+  - row: 5
+    column: 5
+    type: 0
+  - row: 0
+    column: 0
+    type: 0
+  - row: 7
+    column: 7
+    type: 0
+  crateGoalTarget: 10

@@ -9,8 +9,6 @@ using NUnit.Framework;
 
 namespace BlastPuzzle.Tests.EditMode
 {
-    // Layout legend: '.' empty, 'C' crate, 'H' horizontal rocket, 'V' vertical rocket,
-    // 'X' bomb, letters are normal colours. TOP ROW FIRST; row 0 is the bottom.
     public sealed class RocketTests
     {
         private static BoardPosition At(int row, int column) => new BoardPosition(row, column);
@@ -18,8 +16,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void HorizontalRocket_RemovesBlocksAcrossEntireRow()
         {
-            //  B B B B
-            //  R H G Y    <- rocket on row 0
             Board board = BoardLayout.Build(
                 "B B B B",
                 "R H G Y");
@@ -38,9 +34,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void VerticalRocket_RemovesBlocksAcrossEntireColumn()
         {
-            //  B R
-            //  V R     <- vertical rocket in column 0
-            //  G R
             Board board = BoardLayout.Build(
                 "B R",
                 "V R",
@@ -73,9 +66,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void Rocket_DoesNotAffectOtherRowsOrColumns()
         {
-            //  B B B
-            //  R H G   <- only this row clears
-            //  Y Y Y
             Board board = BoardLayout.Build(
                 "B B B",
                 "R H G",
@@ -139,11 +129,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void Bomb_RemovesBlocksInPlusShape()
         {
-            //  B B B B B
-            //  B R R R B
-            //  B R X R B   <- bomb at centre (r2,c2)
-            //  B R R R B
-            //  B B B B B
             Board board = BoardLayout.Build(
                 "B B B B B",
                 "B R R R B",
@@ -161,8 +146,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void Bomb_DoesNotAffectDiagonals()
         {
-            //  The four cells touching the bomb only at a corner must survive. This is the
-            //  whole point of the plus shape.
             Board board = BoardLayout.Build(
                 "B B B B B",
                 "B R R R B",
@@ -221,18 +204,12 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void BombAtCorner_ClampsToBoard()
         {
-            //  R R R
-            //  R R R
-            //  X R R    <- bomb at the bottom-left corner
             Board board = BoardLayout.Build(
                 "R R R",
                 "R R R",
                 "X R R");
 
             PowerUpActivationResult result = PowerUpResolver.Activate(board, At(0, 0));
-
-            // Itself, the cell above and the cell to the right. The diagonal (1,1) is not
-            // included, and the two off-board directions simply do not exist.
             Assert.That(result.RemovedBlockPositions,
                 Is.EquivalentTo(new[] { At(0, 0), At(1, 0), At(0, 1) }),
                 "A corner bomb affects three cells.");
@@ -242,9 +219,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void BombAtEdge_ClampsToBoard()
         {
-            //  R R R
-            //  X R R    <- bomb on the left edge, middle row
-            //  R R R
             Board board = BoardLayout.Build(
                 "R R R",
                 "X R R",
@@ -261,9 +235,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void Bomb_HitsCratesInsideArea()
         {
-            //  R C R     the crate directly above the bomb IS hit
-            //  R X R
-            //  R R C     the crate on the diagonal is NOT
             Board board = BoardLayout.Build(
                 "R C R",
                 "R X R",
@@ -277,17 +248,13 @@ namespace BlastPuzzle.Tests.EditMode
                 "A crate touching the bomb only at a corner survives.");
         }
     }
-
-    public sealed class PowerUpNoChainTests
+    public sealed class PowerUpChainTests
     {
         private static BoardPosition At(int row, int column) => new BoardPosition(row, column);
 
         [Test]
-        public void RocketRemovingBomb_DoesNotActivateBomb()
+        public void RocketSweepingABomb_SetsTheBombOff()
         {
-            //  B B B B B
-            //  R H R X R   <- rocket on row 1 will sweep across the bomb at c3
-            //  B B B B B
             Board board = BoardLayout.Build(
                 "B B B B B",
                 "R H R X R",
@@ -295,30 +262,29 @@ namespace BlastPuzzle.Tests.EditMode
 
             PowerUpActivationResult result = PowerUpResolver.Activate(board, At(1, 1));
 
-            // The bomb is gone as a piece...
-            Assert.That(board.GetCell(1, 3).IsEmpty, Is.True);
-            Assert.That(result.RemovedBlocks.Any(b => b.Kind == BlockKind.Bomb), Is.True);
-
-            // ...but its 3x3 never fired: the rows above and below are untouched.
+            // The rocket's own row is gone, as before.
             for (int column = 0; column < 5; column++)
             {
-                Assert.That(board.GetCell(2, column).HasBlock, Is.True,
-                    $"r2c{column} would have been destroyed by a bomb explosion.");
-                Assert.That(board.GetCell(0, column).HasBlock, Is.True,
-                    $"r0c{column} would have been destroyed by a bomb explosion.");
+                Assert.That(board.GetCell(1, column).IsEmpty, Is.True, $"r1c{column}");
             }
 
-            Assert.That(result.RemovedBlockPositions, Has.Count.EqualTo(5),
-                "Exactly the rocket's own row -- no more.");
+            // ...and the bomb it swept went off, taking the cells above and below it.
+            Assert.That(board.GetCell(2, 3).HasBlock, Is.False, "the bomb's blast should reach r2c3");
+            Assert.That(board.GetCell(0, 3).HasBlock, Is.False, "the bomb's blast should reach r0c3");
+
+            // Only those: the bomb is a plus, so its neighbours' neighbours survive.
+            Assert.That(board.GetCell(2, 2).HasBlock, Is.True);
+            Assert.That(board.GetCell(2, 4).HasBlock, Is.True);
+
+            Assert.That(result.RemovedBlockPositions, Has.Count.EqualTo(7),
+                "Five in the rocket's row plus the two the bomb added.");
+            Assert.That(result.ActivatedPowerUps, Has.Count.EqualTo(2),
+                "The rocket the player tapped, and the bomb it set off.");
         }
 
         [Test]
-        public void BombRemovingRocket_DoesNotActivateRocket()
+        public void BombCatchingARocket_FiresTheWholeRow()
         {
-            //  B B B B B
-            //  B R H B B    the horizontal rocket at r1c2 is inside the bomb's 3x3
-            //  B R X B B
-            //  B B B B B
             Board board = BoardLayout.Build(
                 "B B B B B",
                 "B R H B B",
@@ -326,16 +292,59 @@ namespace BlastPuzzle.Tests.EditMode
                 "B B B B B");
 
             PowerUpActivationResult result = PowerUpResolver.Activate(board, At(1, 2));
+            Assert.That(board.GetCell(2, 0).HasBlock, Is.False, "r2c0 is only reachable by the chained rocket");
+            Assert.That(board.GetCell(2, 4).HasBlock, Is.False, "r2c4 is only reachable by the chained rocket");
 
-            // The rocket is gone as a piece...
-            Assert.That(board.GetCell(2, 2).IsEmpty, Is.True);
-            Assert.That(result.RemovedBlocks.Any(b => b.Kind == BlockKind.Rocket), Is.True);
+            Assert.That(result.ActivatedPowerUps, Has.Count.EqualTo(2));
+            Assert.That(result.ActivatedPowerUps[0].Kind, Is.EqualTo(BlockKind.Bomb),
+                "The tapped piece fires first.");
+            Assert.That(result.ActivatedPowerUps[1].Kind, Is.EqualTo(BlockKind.Rocket));
+        }
 
-            // ...but its row never cleared: r2c0 and r2c4 lie outside the bomb and survive.
-            Assert.That(board.GetCell(2, 0).HasBlock, Is.True,
-                "r2c0 would have been destroyed had the rocket fired.");
-            Assert.That(board.GetCell(2, 4).HasBlock, Is.True,
-                "r2c4 would have been destroyed had the rocket fired.");
+        // The termination guarantee: two rockets that each reach the other.
+        [Test]
+        public void TwoRocketsInRangeOfEachOther_TerminateInsteadOfLooping()
+        {
+            //  H B H   both horizontal rockets share row 0
+            Board board = BoardLayout.Build("H B H");
+
+            PowerUpActivationResult result = PowerUpResolver.Activate(board, At(0, 0));
+
+            Assert.That(result.ActivatedPowerUps, Has.Count.EqualTo(2),
+                "Each rocket fires exactly once, however many times it is reached.");
+            Assert.That(result.RemovedBlockPositions, Has.Count.EqualTo(3));
+            Assert.That(result.RemovedBlockPositions.Distinct().Count(), Is.EqualTo(3));
+        }
+
+        [Test]
+        public void CrossingBlasts_CountAsharedCrateOnlyOnce()
+        {
+            Board board = BoardLayout.Build(
+                "B V B",
+                "H C B",
+                "B B B");
+
+            PowerUpActivationResult result = PowerUpResolver.Activate(board, At(1, 0));
+
+            Assert.That(result.RemovedObstacles.Count, Is.EqualTo(result.RemovedObstacles
+                .Select(removal => removal.Position).Distinct().Count()),
+                "A crate reached by two blasts must be reported once.");
+        }
+
+        [Test]
+        public void ChainedBlocks_AreReportedOnceEach()
+        {
+            Board board = BoardLayout.Build(
+                "B B B B B",
+                "R H R X R",
+                "B B B B B");
+
+            PowerUpActivationResult result = PowerUpResolver.Activate(board, At(1, 1));
+
+            Assert.That(result.RemovedBlockPositions.Distinct().Count(),
+                Is.EqualTo(result.RemovedBlockPositions.Count),
+                "No cell may be reported as destroyed twice.");
+            Assert.That(result.RemovedBlocks, Has.Count.EqualTo(result.RemovedBlockPositions.Count));
         }
 
         [Test]
@@ -379,9 +388,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void BombActivation_CountsOnlyNormalBlocksTowardColorGoals()
         {
-            //  R R R
-            //  R X H    the bomb's plus catches the rocket directly to its right
-            //  R R R
             Board board = BoardLayout.Build(
                 "R R R",
                 "R X H",

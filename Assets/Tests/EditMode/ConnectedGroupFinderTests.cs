@@ -6,10 +6,6 @@ using NUnit.Framework;
 
 namespace BlastPuzzle.Tests.EditMode
 {
-    // Layout strings are written TOP ROW FIRST; BoardLayout flips them so row 0 is the
-    // bottom, matching the domain. Assertions compare MEMBERSHIP, never order: the result
-    // is semantically a set, and locking tests to BFS's visit order would freeze an
-    // implementation detail that no gameplay rule depends on.
     public sealed class ConnectedGroupFinderTests
     {
         private static BoardPosition At(int row, int column) => new BoardPosition(row, column);
@@ -31,9 +27,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void OrthogonallyConnectedGroup_ReturnsAllMembers()
         {
-            //  R R B
-            //  R B B
-            //  R R G
             Board board = BoardLayout.Build(
                 "R R B",
                 "R B B",
@@ -87,8 +80,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void OutsideBoard_ReturnsEmpty()
         {
-            // Documents the chosen contract: a query about a cell that cannot exist
-            // answers "nothing", rather than throwing.
             Board board = BoardLayout.Build("R R");
 
             Assert.That(ConnectedGroupFinder.FindConnectedGroup(board, At(99, 99)), Is.Empty);
@@ -98,8 +89,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void CornerCell_WorksCorrectly()
         {
-            //  R R
-            //  R B     <- start at bottom-left corner, which has only two neighbours
             Board board = BoardLayout.Build(
                 "R R",
                 "R B");
@@ -112,9 +101,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void EdgeCell_WorksCorrectly()
         {
-            //  B R B
-            //  R R R   <- start at the left edge, which has three neighbours
-            //  B R B
             Board board = BoardLayout.Build(
                 "B R B",
                 "R R R",
@@ -133,9 +119,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void RegionBendingAroundCorners_IsFoundEntirely()
         {
-            //  R R B R     Reaching the top-right Red from the top-left one means going
-            //  B R B R     down, across the bottom and back up: BFS has to follow the
-            //  R R R R     winding path rather than a straight line.
             Board board = BoardLayout.Build(
                 "R R B R",
                 "B R B R",
@@ -159,9 +142,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void DisconnectedRegionOfSameColour_IsNotIncluded()
         {
-            //  R R B     Two Red regions of the same colour, fully separated by Blue.
-            //  B B B     Only the one containing the start may come back.
-            //  R R B
             Board board = BoardLayout.Build(
                 "R R B",
                 "B B B",

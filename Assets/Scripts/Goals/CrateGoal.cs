@@ -2,18 +2,7 @@ using System;
 
 namespace BlastPuzzle.Goals
 {
-    // "Destroy N crates", plus how far along the player is.
-    //
-    // Same SHAPE as ColorGoal but a different SOURCE: this advances from destroyed
-    // obstacles, that one from destroyed blocks. They are deliberately separate classes
-    // rather than siblings under a base: the shared part is about ten lines of capped
-    // counting, and a hierarchy to save that would be inheritance introduced for its own
-    // sake rather than to solve a problem.
-    //
-    // Like ColorGoal this is RUNTIME STATE, constructed fresh from LevelDefinition for each
-    // attempt, so the asset never accumulates a player's progress.
-    //
-    // Pure C#: no UnityEngine.
+    // "Destroy N crates", and how far along the player is.
     public sealed class CrateGoal
     {
         public CrateGoal(int targetCount)
@@ -34,9 +23,6 @@ namespace BlastPuzzle.Goals
         public int Remaining => TargetCount - CurrentCount;
 
         public bool IsComplete => CurrentCount >= TargetCount;
-
-        // Capped at the target, so a blast destroying four crates when two were needed reads
-        // "2 / 2" rather than "4 / 2" and Remaining never goes negative.
         public void RecordDestroyed(int count)
         {
             if (count < 0)

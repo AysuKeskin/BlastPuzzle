@@ -15,7 +15,7 @@ MonoBehaviour:
   levelNumber: 1
   rows: 6
   columns: 6
-  moveLimit: 12
+  moveLimit: 9
   availableColors: 000000000100000002000000i
   goals:
   - color: 1

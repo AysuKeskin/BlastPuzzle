@@ -5,11 +5,7 @@ using BlastPuzzle.Boards;
 
 namespace BlastPuzzle.PowerUps
 {
-    // Works out a power-up's footprint and clears it.
-    //
-    // Pure C#: no MonoBehaviour, no UnityEngine. The board geometry lives here rather than
-    // in GameplayController, which orchestrates the sequence but should not contain
-    // row-scanning or 3x3 loops.
+    // Fires a power-up and clears what it reaches. Power-ups caught in the blast fire too.
     public static class PowerUpResolver
     {
         public static PowerUpActivationResult Activate(Board board, BoardPosition position)
@@ -26,56 +22,62 @@ namespace BlastPuzzle.PowerUps
                 throw new InvalidOperationException($"There is no power-up at {position} to activate.");
             }
 
-            Block powerUp = cell.Block;
-            IReadOnlyList<BoardPosition> footprint = Footprint(board, position, powerUp);
-
             var removedBlocks = new List<Block>();
             var removedPositions = new List<BoardPosition>();
             var removedObstacles = new List<ObstacleRemoval>();
+            var activated = new List<Block>();
+            var pending = new Queue<Blast>();
+            var fired = new HashSet<BoardPosition>();
 
-            // Each footprint cell is visited exactly once, so nothing is counted twice --
-            // no deduplication pass is needed, unlike adjacency-based crate hits where one
-            // crate can neighbour several removed blocks.
-            foreach (BoardPosition target in footprint)
+            pending.Enqueue(new Blast(position, cell.Block));
+            fired.Add(position);
+
+            while (pending.Count > 0)
             {
-                Cell targetCell = board.GetCell(target);
+                Blast blast = pending.Dequeue();
+                activated.Add(blast.PowerUp);
 
-                if (targetCell.HasObstacle)
+                foreach (BoardPosition target in Footprint(board, blast.Position, blast.PowerUp))
                 {
-                    // Crates die to a single hit, and a power-up hitting one directly counts
-                    // exactly once -- one ObstacleRemoval, one point of crate-goal progress.
-                    removedObstacles.Add(new ObstacleRemoval(target, board.RemoveObstacle(target)));
-                    continue;
-                }
+                    Cell targetCell = board.GetCell(target);
 
-                if (!targetCell.HasBlock)
-                {
-                    continue;
-                }
+                    if (targetCell.HasObstacle)
+                    {
+                        removedObstacles.Add(new ObstacleRemoval(target, board.RemoveObstacle(target)));
+                        continue;
+                    }
 
-                // NO CHAIN REACTIONS. A Rocket or Bomb caught in this footprint is removed
-                // as a piece and never activated. This is a deliberate scope limit, not an
-                // oversight: the loop simply removes what it finds and never recurses.
-                //
-                // Adding chaining later would mean collecting the power-ups found here into
-                // a queue and draining it after this pass, with a visited set to stop a
-                // Rocket pair activating each other forever.
-                removedBlocks.Add(board.RemoveBlock(target));
-                removedPositions.Add(target);
+                    if (!targetCell.HasBlock)
+                    {
+                        continue;
+                    }
+
+                    Block hit = targetCell.Block;
+                    removedBlocks.Add(board.RemoveBlock(target));
+                    removedPositions.Add(target);
+                    // fired.Add is what ends the chain: two rockets that reach each
+                    // other would otherwise trigger one another forever.
+                    if (hit.IsPowerUp && fired.Add(target))
+                    {
+                        pending.Enqueue(new Blast(target, hit));
+                    }
+                }
             }
 
-            return new PowerUpActivationResult(removedBlocks, removedPositions, removedObstacles);
+            return new PowerUpActivationResult(removedBlocks, removedPositions, removedObstacles, activated);
         }
+        private readonly struct Blast
+        {
+            public Blast(BoardPosition position, Block powerUp)
+            {
+                Position = position;
+                PowerUp = powerUp;
+            }
 
-        // The cells a power-up affects, including its own.
-        //
-        //   Rocket Horizontal : the whole row
-        //   Rocket Vertical   : the whole column
-        //   Bomb              : itself plus its four orthogonal neighbours (a plus shape),
-        //                       clamped to the board -- never diagonals
-        //
-        // A Rocket does NOT stop at a crate: the line is computed geometrically, so the
-        // blast continues across the full row or column regardless of what it passes through.
+            public BoardPosition Position { get; }
+
+            public Block PowerUp { get; }
+        }
         public static IReadOnlyList<BoardPosition> Footprint(Board board, BoardPosition position, Block powerUp)
         {
             var cells = new List<BoardPosition>();
@@ -99,16 +101,6 @@ namespace BlastPuzzle.PowerUps
                     break;
 
                 case BlockKind.Bomb:
-                    // A PLUS, not a square: the bomb's own cell plus its four orthogonal
-                    // neighbours. Diagonals are deliberately excluded, for the same reason
-                    // they are excluded from colour matching and crate hits -- "touching"
-                    // means sharing an edge everywhere in this game, and a bomb that broke
-                    // that rule would be the one inconsistent thing on the board.
-                    //
-                    // Reuses Board.GetOrthogonalNeighbours rather than re-deriving the four
-                    // offsets, so there is exactly one definition of "orthogonal" in the
-                    // project. It already skips off-board coordinates, which is why a corner
-                    // bomb affects three cells and an edge bomb four with no special case.
                     cells.Add(position);
 
                     foreach (Cell neighbour in board.GetOrthogonalNeighbours(position))

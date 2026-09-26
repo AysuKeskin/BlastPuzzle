@@ -5,19 +5,10 @@ using BlastPuzzle.Obstacles;
 
 namespace BlastPuzzle.Tests.EditMode
 {
-    // Builds a Board from text so each test reads like the board it describes.
-    //
-    // Lines are given TOP ROW FIRST, because that is how a board looks written down, while
-    // the domain puts row 0 at the bottom. This helper does the flip in one place so no
-    // individual test has to think about it.
     internal static class BoardLayout
     {
         internal const char EmptyCell = '.';
         internal const char CrateCell = 'C';
-
-        // Power-ups, so a test board can place one without a blast:
-        //   H = horizontal Rocket, V = vertical Rocket, X = Bomb
-        // All are tinted Red; the colour is irrelevant to their behaviour.
         internal const char HorizontalRocketCell = 'H';
         internal const char VerticalRocketCell = 'V';
         internal const char BombCell = 'X';

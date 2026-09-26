@@ -5,15 +5,7 @@ using BlastPuzzle.Boards;
 
 namespace BlastPuzzle.Gameplay
 {
-    // Settles the board: every Block falls as far down its own column as it can.
-    //
-    // Pure C#: no MonoBehaviour, no UnityEngine, no Rigidbody. Falling here is an array
-    // compaction, not a simulation -- the result is computed in one pass and is identical
-    // every time, which is what makes the board's state reproducible and testable.
-    //
-    // Unlike ConnectedGroupFinder, this one DOES mutate the board: applying gravity is a
-    // state transition, not a query. It returns a description of every block that moved so
-    // the presentation layer can update the views it already has.
+    // Drops blocks into the gaps below them. Crates split a column into segments.
     public static class GravityResolver
     {
         public static IReadOnlyList<BlockMove> ApplyGravity(Board board)
@@ -24,9 +16,6 @@ namespace BlastPuzzle.Gameplay
             }
 
             var moves = new List<BlockMove>();
-
-            // Columns are independent: gravity never moves a block sideways, so each column
-            // can be compacted on its own without looking at its neighbours.
             for (int column = 0; column < board.Columns; column++)
             {
                 CompactColumn(board, column, moves);
@@ -34,28 +23,41 @@ namespace BlastPuzzle.Gameplay
 
             return moves;
         }
+        // One downward diagonal step per block. Called after vertical gravity settles.
+        // A side opening is required so a block cannot pass through a solid crate wall.
+        public static IReadOnlyList<BlockMove> ApplyDiagonalGravity(Board board)
+        {
+            if (board == null) throw new ArgumentNullException(nameof(board));
+            var moves = new List<BlockMove>();
+            for (int row = 0; row < board.Rows - 1; row++)
+                for (int column = 0; column < board.Columns; column++)
+                {
+                    var to = new BoardPosition(row, column);
+                    if (!board.GetCell(to).IsEmpty || !HasObstacleAbove(board, to)) continue;
+                    // Alternate preference across the board, with a deterministic tie break.
+                    int preferred = ((row + column) & 1) == 0 ? -1 : 1;
+                    for (int side = 0; side < 2; side++)
+                    {
+                        int sourceColumn = column + (side == 0 ? preferred : -preferred);
+                        if (!board.IsInside(row + 1, sourceColumn) ||
+                            board.GetCell(row, sourceColumn).HasObstacle) continue;
+                        var from = new BoardPosition(row + 1, sourceColumn);
+                        if (!board.GetCell(from).HasBlock) continue;
+                        Block block = board.MoveBlock(from, to);
+                        moves.Add(new BlockMove(block, from, to));
+                        break;
+                    }
+                }
+            return moves;
+        }
 
-        // Two pointers walking the same column from the BOTTOM up (row 0 is the bottom, so
-        // "down" means toward lower indices and the lowest free slot is found first).
-        //
-        //   readRow  - the cell currently being examined
-        //   writeRow - the lowest row in the CURRENT SEGMENT that has not been filled yet
-        //
-        // writeRow only advances when a block is placed, so it always trails or equals
-        // readRow. That single fact gives three guarantees at once:
-        //
-        //   * the destination is always already empty, because everything between writeRow
-        //     and readRow was empty by the time we got here;
-        //   * a block is never written onto a cell that has not been read yet, so nothing
-        //     can be overwritten before it is moved;
-        //   * blocks are placed in the order they are found, so their vertical order within
-        //     the column is preserved -- nothing can fall past anything else.
-        //
-        // OBSTACLES SPLIT THE COLUMN. A crate is fixed and solid, so blocks above it cannot
-        // fall past it. Meeting one, the write pointer jumps to just above it, which starts
-        // a fresh segment: the crate becomes the floor for everything above, while whatever
-        // is below it has already settled on its own. One pass still handles a column with
-        // any number of crates, because each simply restarts the pointer.
+        public static bool HasObstacleAbove(Board board, BoardPosition position)
+        {
+            for (int row = position.Row + 1; row < board.Rows; row++)
+                if (board.GetCell(row, position.Column).HasObstacle) return true;
+            return false;
+        }
+
         private static void CompactColumn(Board board, int column, List<BlockMove> moves)
         {
             int writeRow = 0;
@@ -66,8 +68,7 @@ namespace BlastPuzzle.Gameplay
 
                 if (cell.HasObstacle)
                 {
-                    // Solid floor. The next segment starts immediately above it, and the
-                    // obstacle itself is never moved or recorded as a move.
+                    // A crate blocks the fall, so the next segment starts above it.
                     writeRow = readRow + 1;
                     continue;
                 }
@@ -81,9 +82,6 @@ namespace BlastPuzzle.Gameplay
                 {
                     var from = new BoardPosition(readRow, column);
                     var to = new BoardPosition(writeRow, column);
-
-                    // Board performs the mutation and hands back the same instance, which is
-                    // what keeps the block's identity intact across the fall.
                     Block moved = board.MoveBlock(from, to);
                     moves.Add(new BlockMove(moved, from, to));
                 }

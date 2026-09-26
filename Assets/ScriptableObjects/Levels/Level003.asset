@@ -13,32 +13,24 @@ MonoBehaviour:
   m_Name: Level003
   m_EditorClassIdentifier: BlastPuzzle.Runtime::BlastPuzzle.Levels.LevelDefinition
   levelNumber: 3
-  rows: 8
-  columns: 8
-  moveLimit: 20
-  availableColors: 0000000001000000020000000300000004000000i
+  rows: 6
+  columns: 6
+  moveLimit: 11
+  availableColors: 000000000100000002000000i
   goals:
-  - color: 4
-    targetCount: 8
   - color: 2
-    targetCount: 8
+    targetCount: 10
   obstacles:
   - row: 2
-    column: 1
+    column: 2
     type: 0
   - row: 2
-    column: 6
-    type: 0
-  - row: 4
-    column: 0
-    type: 0
-  - row: 4
-    column: 7
-    type: 0
-  - row: 5
     column: 3
     type: 0
-  - row: 5
-    column: 4
+  - row: 3
+    column: 2
     type: 0
-  crateGoalTarget: 6
+  - row: 3
+    column: 3
+    type: 0
+  crateGoalTarget: 4

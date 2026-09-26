@@ -8,10 +8,6 @@ using NUnit.Framework;
 
 namespace BlastPuzzle.Tests.EditMode
 {
-    // Tests assert INVARIANTS (every hole filled, colours drawn from the allowed set,
-    // survivors untouched) rather than one particular random sequence. The exact sequence
-    // is not part of the contract; only reproducibility for a given seed is, and that has
-    // a test of its own.
     public sealed class RefillResolverTests
     {
         private const int Seed = 12345;
@@ -136,8 +132,6 @@ namespace BlastPuzzle.Tests.EditMode
 
             foreach (BlockSpawn spawn in spawns)
             {
-                // The record must point at the very object sitting in that cell -- this is
-                // what makes Block -> BlockView lookup work for newly created blocks.
                 Assert.That(board.GetCell(spawn.Position).Block, Is.SameAs(spawn.Block),
                     $"{spawn} does not match the block actually in the board.");
             }
@@ -195,9 +189,6 @@ namespace BlastPuzzle.Tests.EditMode
             string Second() => RunAndDescribe(new Random(Seed));
 
             Assert.That(First(), Is.EqualTo(Second()));
-
-            // A different seed should generally give a different board. Not guaranteed in
-            // principle, but across 24 cells and five colours it is a safe assertion.
             Assert.That(RunAndDescribe(new Random(Seed)), Is.Not.EqualTo(RunAndDescribe(new Random(999))));
         }
 

@@ -83,8 +83,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void SquareGroup_UsesDocumentedTieRule()
         {
-            // A 3x2 bounding box that is wider than tall is Horizontal; the interesting case
-            // is the TIE, where width == height. The documented rule resolves it Horizontal.
             var square = new List<BoardPosition>
             {
                 At(0, 0), At(0, 1), At(0, 2),
@@ -135,8 +133,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void PowerUpWithSameStoredColor_IsNotPartOfNormalGroup()
         {
-            // BoardLayout tints its power-ups Red, and these neighbours are Red too --
-            // yet the rocket still must not join the group.
             Board board = BoardLayout.Build("R H R");
 
             IReadOnlyList<BoardPosition> group = ConnectedGroupFinder.FindConnectedGroup(board, At(0, 0));

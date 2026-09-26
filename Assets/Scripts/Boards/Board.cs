@@ -5,22 +5,9 @@ using BlastPuzzle.Obstacles;
 
 namespace BlastPuzzle.Boards
 {
-    // The logical grid, and the single source of truth for board state.
-    //
-    // Deliberately plain C#: no MonoBehaviour, no GameObject, no Transform, no
-    // UnityEngine reference at all. A Board can be built in memory, inspected and
-    // (from Milestone 4) unit-tested without opening a scene or entering play mode.
-    //
-    // ORIENTATION: row 0 is the BOTTOM row and rows increase upwards. This is
-    // chosen so it matches Unity's y-up world space: turning a BoardPosition into
-    // a world position stays a plain multiply with no sign flip, and gravity means
-    // "blocks move toward lower row numbers". Every later system depends on this,
-    // so it is stated here rather than rediscovered per file.
+    // The grid. Row 0 is the bottom row, so gravity moves blocks toward lower rows.
     public sealed class Board
     {
-        // The four orthogonal directions, in a fixed order so that neighbour
-        // enumeration is deterministic. Diagonals are intentionally absent:
-        // blast groups connect up, down, left and right only.
         private static readonly (int RowOffset, int ColumnOffset)[] OrthogonalOffsets =
         {
             (1, 0),   // up    (rows increase upwards)
@@ -46,9 +33,6 @@ namespace BlastPuzzle.Boards
             Rows = rows;
             Columns = columns;
             cells = new Cell[rows, columns];
-
-            // Every coordinate gets a Cell up front, so GetCell never returns null.
-            // The cells start empty; filling them with blocks is a later milestone.
             for (int row = 0; row < rows; row++)
             {
                 for (int column = 0; column < columns; column++)
@@ -66,11 +50,6 @@ namespace BlastPuzzle.Boards
             row >= 0 && row < Rows && column >= 0 && column < Columns;
 
         public bool IsInside(BoardPosition position) => IsInside(position.Row, position.Column);
-
-        // Throws rather than returning null for an off-grid coordinate. Asking for
-        // a cell that cannot exist is a programming mistake, and failing loudly at
-        // the point of the mistake beats a NullReferenceException three systems later.
-        // Callers that legitimately might be off-grid should ask IsInside first.
         public Cell GetCell(int row, int column)
         {
             if (!IsInside(row, column))
@@ -84,17 +63,9 @@ namespace BlastPuzzle.Boards
         }
 
         public Cell GetCell(BoardPosition position) => GetCell(position.Row, position.Column);
-
-        // Mutation goes through the Board so that the coordinate is validated in one
-        // place, and so a future milestone has a single choke point to hook if the
-        // board ever needs to raise change notifications.
         public void SetBlock(BoardPosition position, Block block)
         {
             Cell cell = GetCell(position);
-
-            // The Cell invariant: a crate occupies the cell itself, so a block can never
-            // share it. Refusing here means a bug surfaces at the mistake rather than as a
-            // block mysteriously rendered underneath a crate.
             if (cell.HasObstacle)
             {
                 throw new InvalidOperationException($"Cannot place a block at {position}: it holds {cell.Obstacle}.");
@@ -132,16 +103,6 @@ namespace BlastPuzzle.Boards
         }
 
         public Obstacle GetObstacle(BoardPosition position) => GetCell(position).Obstacle;
-
-        // Moves the exact Block instance from one cell to another.
-        //
-        // The Board stays the mutation authority: gravity describes WHICH moves to make,
-        // but only this method touches a Cell. Both coordinates are validated by GetCell,
-        // and the pre-conditions are enforced rather than assumed, so a wrong move fails
-        // loudly here instead of silently duplicating or losing a block.
-        //
-        // Returns the moved Block, so callers building a move record do not have to read
-        // the source cell first.
         public Block MoveBlock(BoardPosition from, BoardPosition to)
         {
             Cell source = GetCell(from);
@@ -151,16 +112,10 @@ namespace BlastPuzzle.Boards
             {
                 throw new InvalidOperationException($"There is no block at {from} to move.");
             }
-
-            // Moving something to where it already is: nothing to do. Handled explicitly
-            // because the "destination must be empty" check below would otherwise reject it.
             if (from == to)
             {
                 return source.Block;
             }
-
-            // IsEmpty excludes crate cells, so this also prevents a block being moved
-            // into an obstacle.
             if (!destination.IsEmpty)
             {
                 throw new InvalidOperationException($"Cannot move to {to}: that cell is not empty.");
@@ -171,9 +126,6 @@ namespace BlastPuzzle.Boards
             destination.SetBlock(moved);
             return moved;
         }
-
-        // Returns what was removed (null if the cell was already empty) so callers
-        // do not have to read the cell first and then clear it.
         public Block RemoveBlock(BoardPosition position)
         {
             Cell cell = GetCell(position);
@@ -181,10 +133,6 @@ namespace BlastPuzzle.Boards
             cell.RemoveBlock();
             return removed;
         }
-
-        // Up, down, left and right only -- never diagonals. Coordinates that fall
-        // off the grid are skipped, so a corner cell simply yields two neighbours
-        // and an edge cell three. Callers never have to special-case the border.
         public IEnumerable<Cell> GetOrthogonalNeighbours(BoardPosition position)
         {
             foreach ((int rowOffset, int columnOffset) in OrthogonalOffsets)

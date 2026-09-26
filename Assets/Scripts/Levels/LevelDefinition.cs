@@ -6,17 +6,8 @@ using UnityEngine;
 
 namespace BlastPuzzle.Levels
 {
-    // Everything that makes one level different from another, stored as an asset.
-    //
-    // A ScriptableObject rather than a MonoBehaviour because this data belongs to no scene
-    // object and needs no Update: it is a file a designer edits, not a thing that lives in
-    // the world. One Gameplay scene plus Level001.asset IS level 1; swap the reference to
-    // Level002.asset and the same scene, running the same code, is level 2.
-    //
-    // CONFIGURATION ONLY. No MovesRemaining, no goal progress, no GameplayState, no Board,
-    // no Block instances. Everything here is read-only to the game at runtime; the mutable
-    // counterparts are created from it when an attempt starts.
     [CreateAssetMenu(fileName = "Level", menuName = "BlastPuzzle/Level Definition", order = 0)]
+    // One level's configuration, stored as an asset. No player progress lives here.
     public sealed class LevelDefinition : ScriptableObject
     {
         [SerializeField]
@@ -69,12 +60,6 @@ namespace BlastPuzzle.Levels
 
         // Zero means this level asks for no crates.
         public int CrateGoalTarget => crateGoalTarget;
-
-        // Converts this configuration into FRESH runtime progress objects.
-        //
-        // Called once per attempt. Every call allocates new ColorGoal instances starting at
-        // zero, so two attempts at the same level share nothing, and nothing a player does
-        // can reach back into the asset.
         public GoalTracker CreateRuntimeGoals()
         {
             Validate();
@@ -90,11 +75,6 @@ namespace BlastPuzzle.Levels
 
             return new GoalTracker(runtimeGoals, runtimeCrateGoal);
         }
-
-        // Throws on invalid configuration rather than quietly repairing it. A level with
-        // zero moves or no colours is a mistake in the asset, and the useful moment to find
-        // out is at startup with the level's name in the message -- not three systems later
-        // when a board fails to fill.
         public void Validate()
         {
             if (TryFindConfigurationError(out string error))
@@ -102,9 +82,6 @@ namespace BlastPuzzle.Levels
                 throw new InvalidOperationException($"LevelDefinition '{name}' is invalid: {error}");
             }
         }
-
-        // Shared by the runtime check above and the editor check below, so the two can
-        // never drift apart.
         private bool TryFindConfigurationError(out string error)
         {
             if (rows <= 0)
@@ -159,9 +136,6 @@ namespace BlastPuzzle.Levels
                     error = $"Goal '{goal}' must have a target greater than zero.";
                     return true;
                 }
-
-                // "Blue x5" and "Blue x8" together is ambiguous -- and one "Blue x13" says
-                // the same thing without the ambiguity.
                 if (!seen.Add(goal.Color))
                 {
                     error = $"Duplicate goal for colour {goal.Color}; combine them into one.";
@@ -210,16 +184,8 @@ namespace BlastPuzzle.Levels
             error = null;
             return false;
         }
-
-        // Editor-only authoring aid. It warns while a designer types, but it is NOT the
-        // safety net: OnValidate does not run in a build, which is why Validate() is called
-        // explicitly at startup.
         private void OnValidate()
         {
-            // An unnamed instance is one created in memory (ScriptableObject.CreateInstance),
-            // not an asset on disk -- typically a test building a deliberately invalid
-            // configuration. Warning about it tells a designer nothing they can act on and
-            // buries genuine warnings, so only named assets are reported.
             if (string.IsNullOrEmpty(name))
             {
                 return;

@@ -4,12 +4,8 @@ using UnityEngine;
 
 namespace BlastPuzzle.Presentation
 {
-    // Displays one crate.
-    //
-    // Simpler than BlockView because a crate never moves: it is placed once and later
-    // destroyed, so there is no MoveTo and no need to keep a cached coordinate in step with
-    // a transform. Reads the logical obstacle, never writes to it.
     [RequireComponent(typeof(SpriteRenderer))]
+    // One crate on screen.
     public sealed class CrateView : MonoBehaviour
     {
         [SerializeField]

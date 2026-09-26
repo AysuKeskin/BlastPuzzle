@@ -8,8 +8,6 @@ using NUnit.Framework;
 
 namespace BlastPuzzle.Tests.EditMode
 {
-    // Layout strings are TOP ROW FIRST. Row 0 is the bottom, so gravity pulls blocks
-    // toward lower row indices -- visually, toward the last line of each layout.
     public sealed class GravityResolverTests
     {
         private static BoardPosition At(int row, int column) => new BoardPosition(row, column);
@@ -71,11 +69,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void MultipleBlocksInColumn_CompactDownward()
         {
-            //  R        .
-            //  .        .
-            //  B   ->   R
-            //  .        B
-            //  G        G
             Board board = BoardLayout.Build(
                 "R",
                 ".",
@@ -235,24 +228,13 @@ namespace BlastPuzzle.Tests.EditMode
 
             IReadOnlyList<BoardPosition> group = ConnectedGroupFinder.FindConnectedGroup(board, At(2, 0));
             GroupRemover.TryRemoveGroup(board, group, 2);
-
-            //  . . B
-            //  . B B    <- holes, not yet settled
-            //  . . G
             Assert.That(Describe(board), Is.EqualTo("..B/.BB/..G/"));
 
             GravityResolver.ApplyGravity(board);
-
-            //  . . B
-            //  . . B
-            //  . B G
             Assert.That(Describe(board), Is.EqualTo("..B/..B/.BG/"));
             AssertSettled(board);
             Assert.That(CountOccupied(board), Is.EqualTo(4));
         }
-
-        // Scanning each column bottom to top: once an empty cell is seen, everything above
-        // it must also be empty. This is what "settled" means.
         private static void AssertSettled(Board board)
         {
             for (int column = 0; column < board.Columns; column++)

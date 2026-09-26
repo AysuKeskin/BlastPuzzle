@@ -76,9 +76,6 @@ namespace BlastPuzzle.Tests.EditMode
             var blue = new ColorGoal(BlockColor.Blue, 4);
             var red = new ColorGoal(BlockColor.Red, 3);
             var tracker = new GoalTracker(new[] { blue, red });
-
-            // One removal list carrying several colours -- the shape Milestone 12's
-            // power-ups will produce.
             tracker.ProcessRemovedBlocks(new[]
             {
                 Of(BlockColor.Blue), Of(BlockColor.Red), Of(BlockColor.Blue), Of(BlockColor.Green)

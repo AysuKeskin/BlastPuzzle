@@ -8,6 +8,14 @@
 [Uu]ser[Ss]ettings/
 [Rr]ecordings/
 
+# Numbered local exports and Unity build backups
+/[Bb]uild[0-9]*/
+/*_BackUpThisFolder_ButDontShipItWithYourGame/
+
+# Temporary scenes created by Unity Test Runner
+/Assets/InitTestScene*.unity
+/Assets/InitTestScene*.unity.meta
+
 # Memory captures
 [Mm]emoryCaptures/
 

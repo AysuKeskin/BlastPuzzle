@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using UnityEngine.EventSystems;
 using BlastPuzzle.Boards;
 using BlastPuzzle.Gameplay;
 using UnityEngine;
@@ -5,13 +7,7 @@ using UnityEngine.InputSystem;
 
 namespace BlastPuzzle.Presentation
 {
-    // Turns a pointer press into a logical BoardPosition and hands it to the controller.
-    //
-    // This is the only class in the project that knows what a pixel is. Everything
-    // downstream of it deals in rows and columns.
-    //
-    // No Update: the Input System raises an event when a press actually happens, so
-    // nothing runs on the frames where the player is not touching the screen.
+    // Turns a screen tap into a board cell. The only class that knows about pixels.
     public sealed class BoardInputHandler : MonoBehaviour
     {
         private const string GameplayMapName = "Gameplay";
@@ -30,11 +26,34 @@ namespace BlastPuzzle.Presentation
         [SerializeField]
         private GameplayController gameplayController;
 
+        public bool InputBlocked { get; set; }
+
+        private readonly List<RaycastResult> uiHits = new List<RaycastResult>();
+        private PointerEventData pointerEvent;
+        private EventSystem pointerEventSystem;
+
+        public bool IsOverUI(Vector2 position)
+        {
+            var events = EventSystem.current;
+            if (events == null) return false;
+            if (pointerEvent == null || pointerEventSystem != events)
+            {
+                pointerEventSystem = events;
+                pointerEvent = new PointerEventData(events);
+            }
+            pointerEvent.Reset();
+            pointerEvent.position = position;
+            uiHits.Clear();
+            // Raycast now: cached IsPointerOverGameObject can describe the previous
+            // frame when queried from an InputAction callback.
+            events.RaycastAll(pointerEvent, uiHits);
+            foreach (var hit in uiHits)
+                if (hit.module is UnityEngine.UI.GraphicRaycaster) return true;
+            return false;
+        }
+
         private InputAction pointAction;
         private InputAction pressAction;
-
-        // How far the board plane sits in front of the camera. Computed rather than
-        // hardcoded so moving either object does not silently break the conversion.
         private float DistanceToBoardPlane =>
             Mathf.Abs(boardView.transform.position.z - gameplayCamera.transform.position.z);
 
@@ -51,9 +70,6 @@ namespace BlastPuzzle.Presentation
             pointAction.Enable();
             pressAction.Enable();
         }
-
-        // Unsubscribing matters: the InputAction lives on the asset, which outlives this
-        // component. A handler left attached would keep firing into a destroyed object.
         private void OnDisable()
         {
             pressAction.performed -= OnPressPerformed;
@@ -63,9 +79,11 @@ namespace BlastPuzzle.Presentation
 
         private void OnPressPerformed(InputAction.CallbackContext context)
         {
-            // Where the pointer is at the moment of the press. Mouse, pen and finger all
-            // report through <Pointer>, so this one read covers every platform.
+            if (InputBlocked) return;
+
             Vector2 screenPosition = pointAction.ReadValue<Vector2>();
+
+            if (IsOverUI(screenPosition)) return;
 
             Vector3 worldPosition = gameplayCamera.ScreenToWorldPoint(
                 new Vector3(screenPosition.x, screenPosition.y, DistanceToBoardPlane));

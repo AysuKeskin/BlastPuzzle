@@ -9,8 +9,6 @@ namespace BlastPuzzle.Tests.EditMode
 {
     public sealed class GroupRemoverTests
     {
-        // The blast threshold used by the game. Passed in explicitly so these tests pin the
-        // behaviour at the real value rather than whatever a default happens to be.
         private const int MinimumGroupSize = 2;
 
         private static BoardPosition At(int row, int column) => new BoardPosition(row, column);
@@ -18,9 +16,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void ValidGroup_RemovesAllMembers()
         {
-            //  R R B
-            //  R B B
-            //  R R G      the five connected Reds
             Board board = BoardLayout.Build(
                 "R R B",
                 "R B B",
@@ -59,9 +54,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void Removal_DoesNotRemoveDisconnectedSameColorBlocks()
         {
-            //  R R B     two separate Red regions, same colour, split by Blue
-            //  B B B
-            //  R R B
             Board board = BoardLayout.Build(
                 "R R B",
                 "B B B",
@@ -101,9 +93,6 @@ namespace BlastPuzzle.Tests.EditMode
 
             Block original = board.GetCell(0, 0).Block;
             Block returned = board.RemoveBlock(At(0, 0));
-
-            // Same object, not merely an equal one: identity is what lets the view find
-            // the right BlockView.
             Assert.That(returned, Is.SameAs(original));
             Assert.That(returned.Color, Is.EqualTo(BlockColor.Green));
 
@@ -114,9 +103,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void RemovingOneGroup_PreservesOtherBlocks()
         {
-            //  R R B R
-            //  B R B R
-            //  R R R R     nine connected Reds, three Blues
             Board board = BoardLayout.Build(
                 "R R B R",
                 "B R B R",
@@ -135,9 +121,6 @@ namespace BlastPuzzle.Tests.EditMode
         [Test]
         public void GroupPositionsRemainUsableDuringRemoval()
         {
-            // The finder hands back POSITIONS, which are values. Iterating them while the
-            // board is being cleared underneath must stay safe and complete -- this is the
-            // property that would break if Cell references were returned instead.
             Board board = BoardLayout.Build(
                 "R R R",
                 "R R R",

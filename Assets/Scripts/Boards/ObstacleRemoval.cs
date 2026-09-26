@@ -2,14 +2,7 @@ using BlastPuzzle.Obstacles;
 
 namespace BlastPuzzle.Boards
 {
-    // A record of one obstacle being destroyed: which one, and where it stood.
-    //
-    // The sibling of BlockMove and BlockSpawn. Unlike those it carries a POSITION as the
-    // identifying detail rather than relying on object identity, because an obstacle never
-    // moves -- its cell identifies it for its whole life, so the view layer can key on the
-    // coordinate instead of the instance.
-    //
-    // Purely logical: no Vector3, no GameObject, no VFX.
+    // An obstacle that was destroyed, and where it stood.
     public readonly struct ObstacleRemoval
     {
         public ObstacleRemoval(BoardPosition position, Obstacle obstacle)

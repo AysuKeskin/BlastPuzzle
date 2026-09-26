@@ -2,7 +2,9 @@
     "name": "BlastPuzzle.Runtime",
     "rootNamespace": "BlastPuzzle",
     "references": [
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "UnityEngine.UI",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

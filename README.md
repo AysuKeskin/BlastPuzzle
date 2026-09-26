@@ -127,7 +127,6 @@ Across the capture, the CPU graph sits on the 16 ms (60 FPS) line. A few frames 
 
 So the spikes are waiting time, not script, GC or rendering work. The capture has no GPU timing, so it cannot tell whether a GPU or present delay or the OS caused the wait. At 60 FPS the frame is about three missed display refreshes.
 
-The GPU time was not reported ("--" in the capture). No memory or thermal measurements have been made on the device.
 
 **Sprite atlas:** packing the 21 board-piece sprites into one atlas cut idle draw calls from 28 to 20 and batches from 5 to 1 in a seeded Editor before/after run, with no measurable CPU change and about 1.2 MB more texture memory.
 

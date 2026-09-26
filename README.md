@@ -9,7 +9,7 @@ The engineering focus is:
 - a deterministic board simulation written in plain C#, separate from Unity presentation code;
 - data-driven levels authored as ScriptableObjects;
 - 183 automated EditMode and PlayMode tests;
-- pooled block views, with before and after measurements in the Unity Profiler.
+- pooled block views and Unity Profiler measurements, in the Editor and on an iPhone 15.
 
 This is a portfolio-scale project, not a shipped product.
 
@@ -155,9 +155,31 @@ The negative save tests deliberately log warnings and errors (for example `Inval
 
 ## Performance
 
-Profiling was done in **Unity Editor Play Mode** with iOS as the build target. It was not done on a phone. A scripted, seeded scenario ran the same 40 moves on an 8×8 board with crates.
+### On device: iPhone 15, Development build
 
-- **No bottleneck was found.** Main-thread time was about 1 ms per frame. The player loop allocated about 100 B of GC per idle frame, all of it in engine and package code (URP, 2D Animation, Input System) and none in project scripts. The roughly 12.7 KB/frame recorded in Play Mode was Editor overhead.
+<img src="Docs/Images/profiler-iphone15.png" alt="Unity Profiler connected to an iPhone 15 Development build, showing CPU usage around the 16 ms line and the frame hierarchy" width="720">
+
+This was the final build, with the Unity Profiler connected to the phone while the levels were played. In a typical frame (frame 1841 in the capture):
+
+- **CPU:** 16.57 ms in total. Of that, 14.41 ms is `WaitForTargetFPS`, idle time spent holding the 60 FPS target, so the actual work is about 2 ms.
+- **Rendering:** `FinishFrameRendering` takes 1.30 ms.
+- **Scripts:** under 0.1 ms.
+- **GC:** 99 B allocated in the frame.
+
+Across the capture, the CPU graph sits on the 16 ms (60 FPS) line. A few frames spike above 33 ms and are flagged in the Highlights row. The worst one inspected ([frame 2113](Docs/Images/profiler-iphone15-spike.png)) took 45.21 ms:
+
+- 42.74 ms was spent in `WaitForTargetFPS`.
+- The game's own work stayed at about 2.4 ms: rendering 1.51 ms, scripts 0.03 ms, GC 99 B, and no GarbageCollector time.
+
+So the spikes are waiting time, not script, GC or rendering work. The capture has no GPU timing, so it cannot tell whether a GPU or present delay or the OS caused the wait. At 60 FPS the frame is about three missed display refreshes.
+
+The GPU time was not reported ("--" in the capture). No memory or thermal measurements have been made on the device.
+
+### Editor comparison: sprite atlas
+
+A seeded, scripted scenario ran the same 40 moves on an 8×8 board with crates, in **Unity Editor Play Mode** with iOS as the build target.
+
+- **No bottleneck was found.** Main-thread time was about 1 ms per frame. The player loop allocated about 100 B of GC per idle frame, all of it in engine and package code (URP, 2D Animation, Input System) and none in project scripts.
 - **Change:** the 21 board-piece sprites (blocks, rockets, bombs, crate) were packed into one sprite atlas. In the same scenario:
   - idle draw calls went from 28 to 20;
   - idle batches went from 5 to 1;
@@ -165,14 +187,22 @@ Profiling was done in **Unity Editor Play Mode** with iOS as the build target. I
 
   CPU time did not change measurably.
 - **Trade-off:** the 4096×2048 atlas has unused space, so texture memory for these sprites rises from about 2.5 MB to about 3.7 MB (ASTC 6×6 estimate).
-- **Unverified:** these are Editor measurements for comparison only. Frame rate, thermals and memory on a device have not been measured. The game sets `Application.targetFrameRate = 60` on mobile; this sets a target, it does not guarantee 60 FPS.
+
+The game sets `Application.targetFrameRate = 60` on mobile. The device capture shows that target being held in normal play, apart from the occasional wait spikes described above.
 
 ## Mobile
 
 - Portrait only. Canvases use Scale With Screen Size at a 1080×1920 reference. A `SafeAreaFitter` keeps UI clear of notches and the home indicator.
 - The orthographic camera fits the board to the safe area minus the HUD, whatever the aspect ratio. This is covered by EditMode tests at 9:16, 9:19.5 and 9:20.
-- **Verified:** Unity Editor Game view at 1080×1920. An iOS Simulator Release export and an Xcode Simulator build succeeded during an earlier milestone (see [Docs/MILESTONE22.md](Docs/MILESTONE22.md)), but that build predates later changes.
-- **Not verified:** physical iPhone or Android hardware, haptics on a device, touch comfort, and Android builds.
+- **Verified on a physical iPhone 15 (Development build):**
+  - The developer played through all ten levels.
+  - The main menu, HUD, 8×8 board and settings modal render correctly below the Dynamic Island ([device screenshot](Docs/Images/iphone15-level10.jpg)).
+  - The layout was also checked in the Unity Editor Game view at 1080×1920.
+- **Profiled on device:** CPU frame time and GC were checked on the iPhone 15; see [Performance](#performance).
+- **Not verified:**
+  - device memory, GPU time and thermals;
+  - haptics feel;
+  - Android hardware and Android builds.
 
 ## Project structure
 
@@ -195,7 +225,7 @@ Assets/
 └── Tests/
     ├── EditMode/     domain, save and layout tests
     └── Integration/  PlayMode tests in the Gameplay scene
-Docs/             Screenshots and milestone audit notes
+Docs/             Screenshots, GIF, profiler capture and design notes
 ```
 
 ## Running the project
@@ -218,7 +248,7 @@ Each exports an Xcode project to `Builds/`. Open `Unity-iPhone.xcodeproj`, set y
 
 ## Known limitations
 
-- Performance and haptics have not been verified on a physical device; the profiling above comes from the Editor.
+- Device profiling covers CPU and GC on one iPhone 15 Development build. Occasional frame spikes are waiting time, but their source is unknown because GPU timing was not captured. Memory and thermals have not been measured.
 - Crate is the only obstacle type, and it takes one hit.
 - Progression is linear across 10 levels; there is no level select.
 - A level in progress is not saved; quitting mid-level restarts it.

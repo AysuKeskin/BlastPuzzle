@@ -102,16 +102,12 @@ After every move that neither wins nor loses:
 
 ## What did profiling show?
 
-Profiling ran in Editor Play Mode (iOS build target) on a seeded, scripted 40-move scenario.
-
-- **CPU:** main-thread time was about 1 ms per frame.
-- **GC:** there were no per-frame GC allocations from project scripts.
-- **Atlas:** packing the 21 board-piece sprites into one atlas cut idle batches from 5 to 1 and idle draw calls from 28 to 20. CPU time did not change measurably, and texture memory rose by about 1.2 MB.
-- **Not measured:** the device. Numbers from a real iPhone would be the next step.
+- **On device** (iPhone 15, Development build, final code): a typical frame does about 2 ms of work out of the 16.6 ms budget; the rest is `WaitForTargetFPS`. `FinishFrameRendering` takes about 1.3 ms, scripts take under 0.1 ms, and the frame allocates 99 B of GC. A few frames spike above 33 ms. In the worst one inspected (45 ms), 42.7 ms is `WaitForTargetFPS` and the work is still about 2.4 ms, with no GC collection. The spike is waiting time, but its source is unknown because GPU timing was not captured.
+- **In the Editor** (seeded, scripted 40-move scenario): packing the 21 board-piece sprites into one atlas cut idle batches from 5 to 1 and idle draw calls from 28 to 20. CPU time did not change measurably, and texture memory rose by about 1.2 MB.
 
 ## What would come next with more time?
 
-- Profile on a physical iPhone and keep device captures as evidence.
+- Capture GPU timing on device (Xcode GPU frame capture or Instruments) to explain the occasional wait spikes, and take a device memory capture.
 - Strip or compile out the per-move `Debug.Log` calls in release builds.
 - Add a full-flow PlayMode test: menu, then win, next level, and a reload of saved progress. This flow was checked by a scripted smoke run but is not an automated test.
 - Add a second obstacle type (for example multi-hit) through the existing `ObstacleType`/`ObstacleResolver` seam.

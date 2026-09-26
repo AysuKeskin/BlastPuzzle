@@ -1,6 +1,6 @@
 # BlastPuzzle
 
-<img src="Docs/Images/gameplay.gif" alt="Level 3 played through: group blasts, a Rocket, a Bomb, crates breaking and the level-complete panel" width="300" align="right">
+<img src="Docs/Images/gameplay.gif" alt="Level 3 played through: group blasts, a Rocket, two Bombs clearing 3×3 areas, crates breaking and the level-complete panel" width="300" align="right">
 
 A portrait mobile 2D tap-to-blast puzzle game built in Unity 6 and C#. Players remove orthogonally connected groups of same-coloured blocks, complete level goals, break Crates and use Rocket and Bomb power-ups within a limited number of moves. There are ten handcrafted levels, a main menu and saved progression.
 
@@ -8,7 +8,7 @@ The engineering focus is:
 
 - a deterministic board simulation written in plain C#, separate from Unity presentation code;
 - data-driven levels authored as ScriptableObjects;
-- 183 automated EditMode and PlayMode tests;
+- 122 automated EditMode and PlayMode tests;
 - pooled block views and Unity Profiler measurements, in the Editor and on an iPhone 15.
 
 This is a portfolio-scale project, not a shipped product.
@@ -21,7 +21,7 @@ This is a portfolio-scale project, not a shipped product.
 2. Groups of **5–6** leave a **Rocket** on the tapped cell. The Rocket is horizontal if the group was at least as wide as it was tall, vertical otherwise. Groups of **7+** leave a **Bomb**.
 3. Tapping a power-up costs one move:
    - A Rocket clears its whole row or column.
-   - A Bomb clears its own cell and the four orthogonal neighbours.
+   - A Bomb clears the 3×3 square around it, diagonals included.
    - A power-up caught in another blast fires too, as a chain reaction. Each power-up fires at most once per move.
 4. **Crates** are single-hit obstacles. A group blast breaks crates next to the removed cells; power-ups break crates in their footprint. Crates never fall, so gravity treats them as walls.
 5. **Gravity** has two steps. First, blocks fall straight down within the column segments between crates. Then blocks can slide one step diagonally into gaps under crates. Open columns refill from the top. A pocket completely enclosed by crates stays empty until a later move opens a way in.
@@ -83,17 +83,17 @@ More detail: [Docs/ARCHITECTURE.md](Docs/ARCHITECTURE.md).
 
 ## Testing
 
-Final run, 2026-09-26, Unity CLI batch mode: **EditMode 178/178, PlayMode 5/5, total 183/183 passed.**
+Last run, 2026-09-26: **EditMode 117/117, PlayMode 5/5, total 122/122 passed.**
 
 | Area | Tests |
 | --- | --- |
-| Group detection and removal (`ConnectedGroupFinder`, `GroupRemover`) | 20 |
-| Gravity (vertical and diagonal) and refill | 30 |
-| Power-up creation, Rocket, Bomb, chains, goal and group interaction | 38 |
-| Goals and level outcome | 14 |
-| Move availability and shuffle | 30 |
-| Controller rules (move spending, invalid taps, state guarding) | 12 |
-| Save/load: validation, corruption, versioning, atomic write, retry; settings persistence | 25 |
+| Group detection and removal (`ConnectedGroupFinder`, `GroupRemover`) | 10 |
+| Gravity (vertical and diagonal) and refill | 18 |
+| Power-up creation, Rocket, Bomb, chains, goal and group interaction | 26 |
+| Goals and level outcome | 11 |
+| Move availability and shuffle | 20 |
+| Controller rules (move spending, invalid taps, state guarding) | 9 |
+| Save/load: validation, corruption, versioning, atomic write, retry; settings persistence | 14 |
 | Mobile layout: safe area and camera fit at 9:16, 9:19.5 and 9:20 | 9 |
 | PlayMode integration: chain-reaction feedback, pooled views in sync after settling, enclosed gap stays empty, settings panel blocks input, UI tap does not spend a move | 5 |
 

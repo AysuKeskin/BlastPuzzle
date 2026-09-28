@@ -11,7 +11,7 @@ The engineering focus is:
 - 122 automated EditMode and PlayMode tests;
 - pooled block views and Unity Profiler measurements, in the Editor and on an iPhone 15.
 
-This is a portfolio-scale project, not a shipped product.
+This is a personal project, built on my own initiative for learning and as a portfolio piece, not a shipped product.
 
 <br clear="right">
 
